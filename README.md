@@ -1,5 +1,11 @@
 # salakala 🔒🐟
 
+<p align="center">
+  <a href="https://github.com/auth70/salakala/actions"><img src="https://img.shields.io/github/actions/workflow/status/auth70/salakala/ci.yml?logo=github" alt="build"></a>
+  <a href="https://www.npmjs.com/package/salakala"><img src="https://img.shields.io/npm/v/salakala" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/salakala"><img src="https://img.shields.io/npm/types/salakala" alt="npm type definitions"></a>
+</p>
+
 We've all been there, sharing `.env` files in Slack to get a Javascript application quickly working on someone's local machine while feeling bad about security practices. 🫠
 
 But teams always have a shared secret or password manager (1Password, Bitwarden, Google Secrets Manager, AWS Secrets Manager, etc)...

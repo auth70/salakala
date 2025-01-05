@@ -5,10 +5,13 @@ import { SecretsManager } from './lib/SecretProvider.js';
 import { program } from '@commander-js/extra-typings';
 import { escapeEnvValue } from './lib/envEscape.js';
 
+const packageJson = JSON.parse(readFileSync(import.meta.dirname + '/../package.json', 'utf-8'));
+const version = packageJson.version;
+
 program
     .name('salakala')
     .description('Generate .env files from various secret providers')
-    .version('0.0.1');
+    .version(version);
 
 program
     .option('-e, --env <environment>', 'environment to use from salakala.json', 'development')
