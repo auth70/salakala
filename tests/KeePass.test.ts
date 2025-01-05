@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { KeePassProvider } from '../src/lib/providers/KeePass.js';
-import { execSync } from 'child_process';
-
-vi.mock('child_process');
+import { join } from 'path';
+import { fileURLToPath } from 'url';
 
 describe('KeePassProvider', () => {
     let provider: KeePassProvider;
+    const __dirname = fileURLToPath(new URL('.', import.meta.url));
+    const testDbPath = join(__dirname, 'keepass.kdbx');
 
     beforeEach(() => {
-        vi.clearAllMocks();
-        provider = new KeePassProvider();
+        provider = new KeePassProvider('password');
     });
 
     it('should throw error for invalid path format', async () => {
@@ -19,76 +19,30 @@ describe('KeePassProvider', () => {
     });
 
     it('should throw error for incomplete path', async () => {
-        await expect(provider.getSecret('kp:///path/to/database.kdbx'))
+        await expect(provider.getSecret(`kp://${testDbPath}`))
             .rejects
             .toThrow('Invalid KeePass path format');
     });
 
-    it('should retrieve secret successfully on first try', async () => {
-        vi.mocked(execSync).mockReturnValueOnce('test-secret-value\n');
-
-        const result = await provider.getSecret('kp:///path/to/database.kdbx/entry/UserName');
-        
-        expect(result).toBe('test-secret-value');
-        expect(execSync).toHaveBeenCalledWith(
-            'keepassxc-cli show -a UserName "/path/to/database.kdbx" "entry"',
-            expect.objectContaining({
-                stdio: ['ignore', 'pipe', 'pipe']
-            })
-        );
+    it('should retrieve test entry username', async () => {
+        const result = await provider.getSecret(`kp://${testDbPath}/test/UserName`);
+        expect(result).toBe('test');
     });
 
-    it('should retry with password prompt on first failure', async () => {
-        // First call fails (no key file/password)
-        vi.mocked(execSync).mockImplementationOnce(() => {
-            throw new Error('No password or keyfile');
-        });
-        
-        // Second attempt with password prompt succeeds
-        vi.mocked(execSync).mockReturnValueOnce('test-secret-value\n');
-
-        const result = await provider.getSecret('kp:///path/to/database.kdbx/entry/Password');
-        
-        expect(result).toBe('test-secret-value');
-        
-        // First attempt should not inherit stdin
-        expect(execSync).toHaveBeenNthCalledWith(1,
-            'keepassxc-cli show -a Password "/path/to/database.kdbx" "entry"',
-            expect.objectContaining({
-                stdio: ['ignore', 'pipe', 'pipe']
-            })
-        );
-        
-        // Second attempt should inherit stdin for password prompt
-        expect(execSync).toHaveBeenNthCalledWith(2,
-            'keepassxc-cli show -a Password "/path/to/database.kdbx" "entry"',
-            expect.objectContaining({
-                stdio: ['inherit', 'pipe', 'inherit']
-            })
-        );
+    it('should retrieve test entry password', async () => {
+        const result = await provider.getSecret(`kp://${testDbPath}/test/Password`);
+        expect(result).toBe('testtest');
     });
 
-    it('should handle empty secret value', async () => {
-        vi.mocked(execSync).mockReturnValueOnce('');
-
-        await expect(provider.getSecret('kp:///path/to/database.kdbx/entry/UserName'))
+    it('should throw error for non-existent entry', async () => {
+        await expect(provider.getSecret(`kp://${testDbPath}/non-existent/Password`))
             .rejects
-            .toThrow('No value returned for attribute \'UserName\' in entry \'entry\'');
+            .toThrow('Entry \'non-existent\' not found');
     });
 
-    it('should handle password prompt failure', async () => {
-        // First call fails (no key file/password)
-        vi.mocked(execSync).mockImplementationOnce(() => {
-            throw new Error('No password or keyfile');
-        });
-        
-        // Second attempt with password prompt also fails
-        vi.mocked(execSync).mockImplementationOnce(() => {
-            throw new Error('Wrong password');
-        });
-
-        await expect(provider.getSecret('kp:///path/to/database.kdbx/entry/Password'))
+    it('should throw error for non-existent attribute', async () => {
+        await expect(provider.getSecret(`kp://${testDbPath}/test/NonExistentAttribute`))
             .rejects
-            .toThrow('Failed to read KeePass secret: Wrong password');
+            .toThrow('unknown attribute NonExistentAttribute');
     });
 }); 

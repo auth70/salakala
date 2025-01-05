@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { SecretProvider } from '../SecretProvider.js';
 
 /**
@@ -9,11 +9,18 @@ import { SecretProvider } from '../SecretProvider.js';
  * - Key file (configured in KeePassXC)
  * - Interactive password prompt
  * - Environment variables (if configured in KeePassXC)
+ * - Programmatic password input (for testing)
  * 
  * @implements {SecretProvider}
  * @see {@link https://keepassxc.org/docs/KeePassXC_GettingStarted.html#_using_keepassxc_cli} for CLI documentation
  */
 export class KeePassProvider implements SecretProvider {
+    private password?: string;
+
+    constructor(password?: string) {
+        this.password = password;
+    }
+
     /**
      * Retrieves a secret value from a KeePass database using the KeePassXC CLI.
      * 
@@ -80,20 +87,66 @@ export class KeePassProvider implements SecretProvider {
      */
     private async getSecretValue(dbPath: string, entryName: string, attribute: string, allowPrompt: boolean = false): Promise<string> {
         try {
-            // Execute the CLI command to show the specified attribute of the entry
-            const result = execSync(`keepassxc-cli show -a ${attribute} "${dbPath}" "${entryName}"`, {
-                encoding: 'utf-8',
-                // Only inherit stdin if we want to allow password prompt
-                stdio: allowPrompt ? ['inherit', 'pipe', 'inherit'] : ['ignore', 'pipe', 'pipe']
-            });
+            // If we have a password and allowPrompt is true, use spawn for programmatic input
+            if (this.password && allowPrompt) {
+                return await new Promise<string>((resolve, reject) => {
+                    const child = spawn('keepassxc-cli', ['show', '-a', attribute, dbPath, entryName], {
+                        stdio: ['pipe', 'pipe', 'pipe']
+                    });
 
-            // The value might be short (like "test"), so just check if we got any output
-            const value = result?.trim();
-            if (typeof value !== 'string' || value === '') {
-                throw new Error(`No value returned for attribute '${attribute}' in entry '${entryName}'`);
+                    let output = '';
+                    let errorOutput = '';
+
+                    child.stdout.on('data', (data) => {
+                        output += data.toString();
+                    });
+
+                    child.stderr.on('data', (data) => {
+                        const stderr = data.toString();
+                        // Only append if it's not the password prompt
+                        if (!stderr.includes('Enter password')) {
+                            errorOutput += stderr;
+                        }
+                    });
+
+                    child.on('close', (code) => {
+                        if (code === 0) {
+                            const value = output.trim();
+                            if (!value) {
+                                reject(new Error(`No value returned for attribute '${attribute}' in entry '${entryName}'`));
+                            } else {
+                                resolve(value);
+                            }
+                        } else {
+                            if (errorOutput.includes('Could not find entry')) {
+                                reject(new Error(`Entry '${entryName}' not found in database '${dbPath}'`));
+                            } else {
+                                reject(new Error(errorOutput || 'Failed to read KeePass secret'));
+                            }
+                        }
+                    });
+
+                    // Write password when prompted
+                    child.stderr.on('data', (data) => {
+                        if (data.toString().includes('Enter password')) {
+                            child.stdin.write(this.password + '\n');
+                        }
+                    });
+                });
+            } else {
+                // Use existing execSync implementation for non-password or non-interactive cases
+                const result = execSync(`keepassxc-cli show -a ${attribute} "${dbPath}" "${entryName}"`, {
+                    encoding: 'utf-8',
+                    stdio: allowPrompt ? ['inherit', 'pipe', 'inherit'] : ['ignore', 'pipe', 'pipe']
+                });
+
+                const value = result?.trim();
+                if (typeof value !== 'string' || value === '') {
+                    throw new Error(`No value returned for attribute '${attribute}' in entry '${entryName}'`);
+                }
+
+                return value;
             }
-
-            return value;
         } catch (error) {
             if (error instanceof Error && error.message.includes('Could not find entry')) {
                 throw new Error(`Entry '${entryName}' not found in database '${dbPath}'`);

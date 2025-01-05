@@ -16,6 +16,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Install KeePassXC
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y keepassxc
+    
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
