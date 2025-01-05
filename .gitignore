@@ -1,0 +1,7 @@
+.DS_Store
+**/.DS_Store
+.env
+salakala.json
+test-env.cjs
+dist/
+node_modules/

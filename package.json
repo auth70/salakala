@@ -1,0 +1,45 @@
+{
+    "name": "salakala",
+    "bin": {
+        "salakala": "./dist/cli.js"
+    },
+    "version": "0.0.1",
+    "description": "Generate .env files from various secret providers",
+    "type": "module",
+    "scripts": {
+        "build": "tsc",
+        "test": "vitest run",
+        "prepare": "npm run build"
+    },
+    "homepage": "https://github.com/auth70/salakala",
+    "repository": "github:auth70/salakala",
+    "contributors": [
+        {
+            "name": "miunau",
+            "email": "miunau+npm@miunau.com",
+            "url": "https://miunau.com"
+        }
+    ],
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+        "vitest": "^2.0.0"
+    },
+    "files": [
+        "dist",
+        "LICENSE",
+        "README.md"
+    ],
+    "dependencies": {
+        "@aws-sdk/client-secrets-manager": "^3.0.0",
+        "@azure/identity": "^4.0.0",
+        "@azure/keyvault-secrets": "^4.0.0",
+        "@commander-js/extra-typings": "^13.0.0",
+        "@google-cloud/secret-manager": "^5.0.0",
+        "commander": "^11.0.0",
+        "dotenv": "^16.4.7",
+        "inquirer": "^12.3.0",
+        "node-vault": "^0.10.0"
+    }
+}
