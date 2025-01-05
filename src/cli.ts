@@ -16,6 +16,7 @@ program
 program
     .option('-e, --env <environment>', 'environment to use from salakala.json', 'development')
     .option('-o, --output <file>', 'output file path', '.env')
+    .option('-w, --overwrite', 'overwrite the output file instead of merging with existing values')
     .action(async (options) => {
         try {
             const width = process.stdout.columns;
@@ -28,20 +29,20 @@ program
             const manager = new SecretsManager();
             const secrets = await manager.loadSecrets('salakala.json', options.env);
 
-            // Read existing .env file if it exists
-            let existingEnv: Record<string, string> = {};
-            if (existsSync(options.output)) {
+            // Read existing .env file if it exists and we're not overwriting
+            let mergedEnv = secrets;
+            if (!options.overwrite && existsSync(options.output)) {
                 const existingContent = readFileSync(options.output, 'utf-8');
+                const existingEnv: Record<string, string> = {};
                 existingContent.split('\n').forEach(line => {
                     const match = line.match(/^([^=]+)=(.*)$/);
                     if (match) {
                         existingEnv[match[1]] = match[2];
                     }
                 });
+                // Merge existing env with new secrets (new secrets take precedence)
+                mergedEnv = { ...existingEnv, ...secrets };
             }
-
-            // Merge existing env with new secrets (new secrets take precedence)
-            const mergedEnv = { ...existingEnv, ...secrets };
             
             // Convert merged secrets to .env format with proper escaping
             const envContent = Object.entries(mergedEnv)
@@ -50,7 +51,8 @@ program
             
             writeFileSync(options.output, envContent + '\n');
             console.log(`${'-'.repeat(padding)}`);
-            console.log(`Successfully updated ${options.output} using '${options.env}' environment 🔒🐟`);
+            const mode = options.overwrite ? 'overwrote' : 'updated';
+            console.log(`Successfully ${mode} ${options.output} using '${options.env}' environment 🔒🐟`);
             console.log(`${'-'.repeat(padding)}`);
         } catch (error) {
             console.error('Error:', error instanceof Error ? error.message : String(error));

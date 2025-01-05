@@ -40,10 +40,6 @@ npm install -g salakala
 
 ## Usage
 
-salakala is still under development! Please report any issues you find. If you want to add support for a new provider, please open an issue or a PR.
-
-### CLI Usage
-
 1. Create a `salakala.json` file in your project (this file is safe to commit to your repository)
 2. Run salakala to generate your `.env` file:
 
@@ -52,14 +48,19 @@ salakala is still under development! Please report any issues you find. If you w
 salakala
 
 # Or specify an environment
-salakala --env staging
+salakala -e staging
 
 # Specify a different output file
-salakala --output .env.local
+salakala -o .env.local
+
+# Overwrite existing file instead of merging
+salakala -w
 
 # Show help
 salakala --help
 ```
+
+salakala is fresh and under development! Please report any issues you find. If you want to add support for a new provider, please open an issue or a PR.
 
 ### Example salakala.json
 
