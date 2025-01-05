@@ -9,6 +9,7 @@ import { LastPassProvider } from "./providers/LastPass.js";
 import { DopplerProvider } from "./providers/Doppler.js";
 import { InfisicalProvider } from "./providers/Infisical.js";
 import { KeePassProvider } from "./providers/KeePass.js";
+import { GitHubSecretsProvider } from "./providers/GitHubSecrets.js";
 
 /**
  * Interface for secret management providers.
@@ -70,9 +71,29 @@ export class SecretsManager {
             ['doppler://', new DopplerProvider()],
             ['inf://', new InfisicalProvider()],
             ['kp://', new KeePassProvider()],
+            ['ghs://', new GitHubSecretsProvider()],
         ]);
     }
-    
+
+    /**
+     * Substitutes environment variables in a secret path.
+     * Variables are specified in the format ${VARIABLE_NAME} and are replaced with their values from process.env.
+     * 
+     * @param {string} secretPath - The secret path that may contain environment variable references
+     * @returns {string} The secret path with environment variables substituted
+     * @throws {Error} If a referenced environment variable is not defined
+     * @private
+     */
+    private substituteVariables(secretPath: string): string {
+        return secretPath.replace(/\${([^}]+)}/g, (match, varName) => {
+            const value = process.env[varName];
+            if (value === undefined) {
+                throw new Error(`Environment variable '${varName}' referenced in secret path '${secretPath}' is not defined`);
+            }
+            return value;
+        });
+    }
+
     /**
      * Determines the appropriate provider for a given secret path based on its prefix.
      * 
@@ -89,7 +110,7 @@ export class SecretsManager {
         }
         throw new Error(`No provider found for secret path: ${secretPath}`);
     }
-    
+
     /**
      * Loads secrets from a configuration file and retrieves their values from appropriate providers.
      * Supports both flat configurations and environment-specific configurations.
@@ -117,20 +138,24 @@ export class SecretsManager {
 
         // Group secrets by provider prefix
         const secretsByProvider = new Map<string, Map<string, string>>();
+        const secrets: Record<string, string> = {};
+        const errors: Error[] = [];
+
         for (const [envVar, secretPath] of Object.entries(secretsConfig)) {
-            const prefix = Array.from(this.providers.keys()).find(p => secretPath.startsWith(p));
+            // Substitute environment variables in the secret path
+            const resolvedPath = this.substituteVariables(secretPath);
+            const prefix = Array.from(this.providers.keys()).find(p => resolvedPath.startsWith(p));
             if (!prefix) {
-                throw new Error(`No provider found for secret path: ${secretPath}`);
+                // If no provider prefix is found, treat it as a regular value
+                secrets[envVar] = resolvedPath;
+                continue;
             }
             
             if (!secretsByProvider.has(prefix)) {
                 secretsByProvider.set(prefix, new Map());
             }
-            secretsByProvider.get(prefix)!.set(envVar, secretPath);
+            secretsByProvider.get(prefix)!.set(envVar, resolvedPath);
         }
-
-        const secrets: Record<string, string> = {};
-        const errors: Error[] = [];
 
         // Process each provider's secrets in parallel
         await Promise.all(Array.from(secretsByProvider.entries()).map(async ([prefix, secretGroup]) => {

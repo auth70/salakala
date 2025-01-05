@@ -29,7 +29,7 @@ What if you just had a nice little JSON file in your code repository that define
 }
 ```
 
-salakala does exactly that! It wraps around your secrets manager and generates `.env` files for your local development environment. As long as you're logged in to the manager you're using, it should just work.
+salakala does exactly that! It wraps around your secrets manager and generates `.env` files from the secrets you define in your `salakala.json` file. As long as you're logged in to the manager you're using, it should just work.
 
 ## Installation
 
@@ -39,6 +39,8 @@ npm install -g salakala
 ```
 
 ## Usage
+
+salakala is still under development! Please report any issues you find. If you want to add support for a new provider, please open an issue or a PR.
 
 ### CLI Usage
 
@@ -59,9 +61,9 @@ salakala --output .env.local
 salakala --help
 ```
 
-#### Example salakala.json
+### Example salakala.json
 
-##### Flat structure (no environment specific secrets):
+#### Flat structure (no environment specific secrets)
 
 ```json
 {
@@ -70,7 +72,7 @@ salakala --help
 }
 ```
 
-##### Nested structure (environment specific secrets):
+#### Nested structure (environment specific secrets)
 
 ```json
 {
@@ -82,6 +84,62 @@ salakala --help
     }
 }
 ```
+
+#### Using environment variables in secret paths
+
+You can use environment variables in your secret paths using `${VARIABLE_NAME}` syntax. This is useful when you need to dynamically configure parts of the secret path:
+
+```json
+{
+    "development": {
+        "GCP_API_KEY": "gcsm://projects/${PROJECT_ID}/secrets/api-key/versions/latest",
+        "AWS_SECRET": "awssm://${AWS_REGION}/application/${ENV}/secret",
+        "AZURE_CONFIG": "azurekv://${VAULT_NAME}.vault.azure.net/config"
+    }
+}
+```
+
+The environment variables must be set before running salakala. For example:
+
+```bash
+# Set the variables
+export PROJECT_ID=my-project
+export AWS_REGION=us-east-1
+export ENV=development
+export VAULT_NAME=my-vault
+
+# Run salakala
+salakala
+```
+
+If a referenced environment variable is not defined, salakala will throw an error indicating which variable is missing.
+
+#### Using non-secret values
+
+You can also include regular, non-secret values in your `salakala.json`. Any value that doesn't start with a provider prefix (like `op://`, `gcsm://`, etc.) will be passed through directly to the `.env` file:
+
+```json
+{
+    "development": {
+        "DB_PASSWORD": "op://vault/database/password",
+        "API_KEY": "gcsm://projects/my-project/secrets/api-key/versions/latest",
+        "APP_NAME": "My Development App",
+        "DEBUG": "true",
+        "PORT": "3000",
+        "API_URL": "https://api.example.com"
+    }
+}
+```
+
+In this example:
+- `DB_PASSWORD` and `API_KEY` will be fetched from their respective secret managers
+- `APP_NAME`, `DEBUG`, `PORT`, and `API_URL` will be passed through directly to the `.env` file
+
+This is useful for mixing configuration values that don't need to be stored in a secrets manager with those that do.
+
+#### Binary content
+
+salakala will try to automatically detect if a secret is binary with providers that support it, and will output it as a base64 encoded string in the `.env` file.
 
 ## Supported Providers
 
@@ -144,6 +202,15 @@ Fetches secrets from HashiCorp Vault.
   - Vault server accessible
   - `VAULT_ADDR` and `VAULT_TOKEN` environment variables set
 
+### GitHub Secrets (`ghs://`)
+Uses the GitHub CLI to fetch repository secrets.
+- Format: `ghs://owner/repo/secret-name`
+- Example: `ghs://auth70/salakala/API_KEY`
+- Requirements:
+  - GitHub CLI (`gh`) installed
+  - Logged in to GitHub CLI
+  - Appropriate repository access permissions
+
 ### Doppler (`doppler://`)
 Uses the Doppler CLI to fetch secrets.
 - Format: `doppler://project/config/secret-name`
@@ -187,14 +254,10 @@ Uses the KeePassXC CLI to fetch secrets from a KeePass database.
    - Include provider setup instructions in your project README
    - Consider using a single provider per project if possible
 
-## Error Handling
-
-The CLI will:
-- Provide clear error messages if a provider isn't configured
-- Automatically retry after login for CLI-based providers
-- Show which secrets failed to load and why
-- Exit with non-zero status if any secrets fail to load
-
 ## Contributing
 
-Contributions are welcome! Feel free to submit issues and pull requests. 
+Contributions are welcome! Feel free to submit issues and pull requests.
+
+## License
+
+MIT

@@ -23,6 +23,8 @@ describe('SecretsManager', () => {
 
     beforeEach(() => {
         manager = new SecretsManager();
+        // Reset process.env for each test
+        process.env = {};
     });
 
     it('should load secrets from flat config', async () => {
@@ -113,20 +115,142 @@ describe('SecretsManager', () => {
             .toThrow(/Environment 'production' not found in config file/);
     });
 
-    it('should throw error for unknown provider', async () => {
+    it('should pass through values with unknown provider prefix', async () => {
         // Set up mock flat config with unknown provider
         vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
             "TEST": "unknown://test"
         }));
 
+        const secrets = await manager.loadSecrets('config.json');
+        
+        expect(secrets).toEqual({
+            TEST: 'unknown://test'
+        });
+    });
+
+    // New tests for variable substitution
+    it('should substitute environment variables in secret paths', async () => {
+        // Set environment variables
+        process.env.PROJECT_ID = 'my-project';
+        process.env.REGION = 'us-east-1';
+
+        // Set up mock config with variable references
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+            "DB_PASSWORD": "gcsm://projects/${PROJECT_ID}/secrets/db-password/versions/latest",
+            "API_KEY": "awssm://${REGION}/api-key"
+        }));
+
+        // Mock the providers
+        manager['providers'] = new Map([
+            ['gcsm://', { getSecret: async (path: string) => {
+                expect(path).toBe('gcsm://projects/my-project/secrets/db-password/versions/latest');
+                return 'db-password-value';
+            }}],
+            ['awssm://', { getSecret: async (path: string) => {
+                expect(path).toBe('awssm://us-east-1/api-key');
+                return 'api-key-value';
+            }}]
+        ]);
+
+        const secrets = await manager.loadSecrets('config.json');
+        
+        expect(secrets).toEqual({
+            DB_PASSWORD: 'db-password-value',
+            API_KEY: 'api-key-value'
+        });
+    });
+
+    it('should throw error for undefined environment variables', async () => {
+        // Set up mock config with undefined variable reference
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+            "API_KEY": "gcsm://projects/${UNDEFINED_VAR}/secrets/api-key/versions/latest"
+        }));
+
         await expect(manager.loadSecrets('config.json'))
             .rejects
-            .toThrow(/No provider found for secret path/);
+            .toThrow(/Environment variable 'UNDEFINED_VAR' referenced in secret path.*is not defined/);
+    });
+
+    it('should handle multiple variable substitutions in one path', async () => {
+        // Set environment variables
+        process.env.PROJECT_ID = 'my-project';
+        process.env.SECRET_NAME = 'api-key';
+        process.env.VERSION = 'v1';
+
+        // Set up mock config with multiple variable references
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+            "API_KEY": "gcsm://projects/${PROJECT_ID}/secrets/${SECRET_NAME}/versions/${VERSION}"
+        }));
+
+        // Mock the provider
+        manager['providers'] = new Map([
+            ['gcsm://', { getSecret: async (path: string) => {
+                expect(path).toBe('gcsm://projects/my-project/secrets/api-key/versions/v1');
+                return 'api-key-value';
+            }}]
+        ]);
+
+        const secrets = await manager.loadSecrets('config.json');
+        
+        expect(secrets).toEqual({
+            API_KEY: 'api-key-value'
+        });
+    });
+
+    it('should handle environment variables in environment-specific config', async () => {
+        // Set environment variables
+        process.env.PROJECT_ID = 'my-project';
+        process.env.ENV = 'dev';
+
+        // Set up mock environment config with variable references
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+            development: {
+                "API_KEY": "gcsm://projects/${PROJECT_ID}/secrets/${ENV}/api-key/versions/latest"
+            }
+        }));
+
+        // Mock the provider
+        manager['providers'] = new Map([
+            ['gcsm://', { getSecret: async (path: string) => {
+                expect(path).toBe('gcsm://projects/my-project/secrets/dev/api-key/versions/latest');
+                return 'api-key-value';
+            }}]
+        ]);
+
+        const secrets = await manager.loadSecrets('config.json', 'development');
+        
+        expect(secrets).toEqual({
+            API_KEY: 'api-key-value'
+        });
+    });
+
+    it('should pass through non-secret values directly', async () => {
+        // Set up mock config with both secret and non-secret values
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+            "SECRET_VALUE": "op://vault/item/field",
+            "NORMAL_VALUE": "just a regular value",
+            "NUMBER_VALUE": "12345",
+            "URL_VALUE": "https://example.com"
+        }));
+
+        // Mock the provider
+        manager['providers'] = new Map([
+            ['op://', { getSecret: async () => 'secret-value' }]
+        ]);
+
+        const secrets = await manager.loadSecrets('config.json');
+        
+        expect(secrets).toEqual({
+            SECRET_VALUE: 'secret-value',
+            NORMAL_VALUE: 'just a regular value',
+            NUMBER_VALUE: '12345',
+            URL_VALUE: 'https://example.com'
+        });
     });
 });
 
 // Add tests for environment variable value escaping
-describe('Environment Variable Value Escaping', () => {
+describe('escapeEnvValue', () => {
     it('should handle simple values without escaping', () => {
         expect(escapeEnvValue('simple-value')).toBe('simple-value');
         expect(escapeEnvValue('123456')).toBe('123456');
