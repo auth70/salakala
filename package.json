@@ -22,9 +22,9 @@
     ],
     "license": "MIT",
     "devDependencies": {
-        "@types/node": "^20.0.0",
-        "typescript": "^5.0.0",
-        "vitest": "^2.0.0"
+        "@types/node": "^22.10.5",
+        "typescript": "^5.7.2",
+        "vitest": "^2.1.8"
     },
     "files": [
         "dist",
@@ -32,14 +32,14 @@
         "README.md"
     ],
     "dependencies": {
-        "@aws-sdk/client-secrets-manager": "^3.0.0",
-        "@azure/identity": "^4.0.0",
-        "@azure/keyvault-secrets": "^4.0.0",
+        "@aws-sdk/client-secrets-manager": "^3.721.0",
+        "@azure/identity": "^4.5.0",
+        "@azure/keyvault-secrets": "^4.9.0",
         "@commander-js/extra-typings": "^13.0.0",
-        "@google-cloud/secret-manager": "^5.0.0",
-        "commander": "^11.0.0",
+        "@google-cloud/secret-manager": "^5.6.0",
+        "commander": "^13.0.0",
         "dotenv": "^16.4.7",
         "inquirer": "^12.3.0",
-        "node-vault": "^0.10.0"
+        "node-vault": "^0.10.2"
     }
 }
