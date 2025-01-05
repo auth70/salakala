@@ -18,13 +18,13 @@ export class KeePassProvider implements SecretProvider {
      * Retrieves a secret value from a KeePass database using the KeePassXC CLI.
      * 
      * @param {string} path - The KeePass secret reference path
-     *                        Format: kp://path/to/database.kdbx/entry-path
-     *                        Example: kp://secrets/main.kdbx/Web/GitHub/access-token
+     *                        Format: kp://path/to/database.kdbx/entry-name/attribute
+     *                        Example: kp:///path/to/db.kdbx/github/Password
      * @returns {Promise<string>} The secret value
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved
      */
     async getSecret(path: string): Promise<string> {
-        // Format: kp://path/to/database.kdbx/entry-path
+        // Format: kp://path/to/database.kdbx/entry-name/attribute
         if (!path.startsWith('kp://')) {
             throw new Error('Invalid KeePass secret path');
         }
@@ -41,22 +41,23 @@ export class KeePassProvider implements SecretProvider {
             }
         }
 
-        if (dbPathEndIndex === -1 || dbPathEndIndex === parts.length - 1) {
-            throw new Error('Invalid KeePass path format. Expected: kp://path/to/database.kdbx/entry-path');
+        if (dbPathEndIndex === -1 || dbPathEndIndex >= parts.length - 2) {
+            throw new Error('Invalid KeePass path format. Expected: kp://path/to/database.kdbx/entry-name/attribute');
         }
 
-        // Split the path into database path and entry path components
+        // Split the path into components
         const dbPath = parts.slice(0, dbPathEndIndex + 1).join('/');
-        const entryPath = parts.slice(dbPathEndIndex + 1).join('/');
+        const entryName = parts[dbPathEndIndex + 1];
+        const attribute = parts[dbPathEndIndex + 2];
 
         try {
             // First try to get the secret directly (might work if key file is configured)
-            return await this.getSecretValue(dbPath, entryPath);
+            return await this.getSecretValue(dbPath, entryName, attribute);
         } catch (error: unknown) {
             // If it fails, try with interactive password prompt
             try {
                 // The CLI will prompt for password automatically with stdio: 'inherit'
-                return await this.getSecretValue(dbPath, entryPath, true);
+                return await this.getSecretValue(dbPath, entryName, attribute, true);
             } catch (retryError: unknown) {
                 if (retryError instanceof Error) {
                     throw new Error(`Failed to read KeePass secret: ${retryError.message}`);
@@ -70,29 +71,34 @@ export class KeePassProvider implements SecretProvider {
      * Internal helper method to execute the KeePassXC CLI command and retrieve the secret value.
      * 
      * @param {string} dbPath - Path to the KeePass database file (.kdbx)
-     * @param {string} entryPath - Path to the entry within the database
+     * @param {string} entryName - Name of the entry in the database
+     * @param {string} attribute - The attribute to fetch (Password, UserName, etc)
      * @param {boolean} [allowPrompt=false] - Whether to allow interactive password prompt
      * @returns {Promise<string>} The secret value
-     * @throws {Error} If the secret cannot be retrieved or the value is empty
+     * @throws {Error} If the secret cannot be retrieved
      * @private
      */
-    private async getSecretValue(dbPath: string, entryPath: string, allowPrompt: boolean = false): Promise<string> {
-        // Execute the CLI command to show only the password field of the entry
-        const result = execSync(`keepassxc-cli show -a Password "${dbPath}" "${entryPath}"`, {
-            encoding: 'utf-8',
-            // Only inherit stdin if we want to allow password prompt
-            stdio: allowPrompt ? 'inherit' : ['ignore', 'pipe', 'pipe']
-        });
+    private async getSecretValue(dbPath: string, entryName: string, attribute: string, allowPrompt: boolean = false): Promise<string> {
+        try {
+            // Execute the CLI command to show the specified attribute of the entry
+            const result = execSync(`keepassxc-cli show -a ${attribute} "${dbPath}" "${entryName}"`, {
+                encoding: 'utf-8',
+                // Only inherit stdin if we want to allow password prompt
+                stdio: allowPrompt ? ['inherit', 'pipe', 'inherit'] : ['ignore', 'pipe', 'pipe']
+            });
 
-        if (!result) {
-            throw new Error(`No value found for entry '${entryPath}' in database '${dbPath}'`);
+            // The value might be short (like "test"), so just check if we got any output
+            const value = result?.trim();
+            if (typeof value !== 'string' || value === '') {
+                throw new Error(`No value returned for attribute '${attribute}' in entry '${entryName}'`);
+            }
+
+            return value;
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('Could not find entry')) {
+                throw new Error(`Entry '${entryName}' not found in database '${dbPath}'`);
+            }
+            throw error;
         }
-
-        const value = result.trim();
-        if (!value) {
-            throw new Error(`No value found for entry '${entryPath}' in database '${dbPath}'`);
-        }
-
-        return value;
     }
-} 
+}

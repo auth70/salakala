@@ -27,11 +27,11 @@ describe('KeePassProvider', () => {
     it('should retrieve secret successfully on first try', async () => {
         vi.mocked(execSync).mockReturnValueOnce('test-secret-value\n');
 
-        const result = await provider.getSecret('kp:///path/to/database.kdbx/entry/path');
+        const result = await provider.getSecret('kp:///path/to/database.kdbx/entry/UserName');
         
         expect(result).toBe('test-secret-value');
         expect(execSync).toHaveBeenCalledWith(
-            'keepassxc-cli show -a Password "/path/to/database.kdbx" "entry/path"',
+            'keepassxc-cli show -a UserName "/path/to/database.kdbx" "entry"',
             expect.objectContaining({
                 stdio: ['ignore', 'pipe', 'pipe']
             })
@@ -47,13 +47,13 @@ describe('KeePassProvider', () => {
         // Second attempt with password prompt succeeds
         vi.mocked(execSync).mockReturnValueOnce('test-secret-value\n');
 
-        const result = await provider.getSecret('kp:///path/to/database.kdbx/entry/path');
+        const result = await provider.getSecret('kp:///path/to/database.kdbx/entry/Password');
         
         expect(result).toBe('test-secret-value');
         
         // First attempt should not inherit stdin
         expect(execSync).toHaveBeenNthCalledWith(1,
-            'keepassxc-cli show -a Password "/path/to/database.kdbx" "entry/path"',
+            'keepassxc-cli show -a Password "/path/to/database.kdbx" "entry"',
             expect.objectContaining({
                 stdio: ['ignore', 'pipe', 'pipe']
             })
@@ -61,9 +61,9 @@ describe('KeePassProvider', () => {
         
         // Second attempt should inherit stdin for password prompt
         expect(execSync).toHaveBeenNthCalledWith(2,
-            'keepassxc-cli show -a Password "/path/to/database.kdbx" "entry/path"',
+            'keepassxc-cli show -a Password "/path/to/database.kdbx" "entry"',
             expect.objectContaining({
-                stdio: 'inherit'
+                stdio: ['inherit', 'pipe', 'inherit']
             })
         );
     });
@@ -71,9 +71,9 @@ describe('KeePassProvider', () => {
     it('should handle empty secret value', async () => {
         vi.mocked(execSync).mockReturnValueOnce('');
 
-        await expect(provider.getSecret('kp:///path/to/database.kdbx/entry/path'))
+        await expect(provider.getSecret('kp:///path/to/database.kdbx/entry/UserName'))
             .rejects
-            .toThrow('No value found for entry');
+            .toThrow('No value returned for attribute \'UserName\' in entry \'entry\'');
     });
 
     it('should handle password prompt failure', async () => {
@@ -87,7 +87,7 @@ describe('KeePassProvider', () => {
             throw new Error('Wrong password');
         });
 
-        await expect(provider.getSecret('kp:///path/to/database.kdbx/entry/path'))
+        await expect(provider.getSecret('kp:///path/to/database.kdbx/entry/Password'))
             .rejects
             .toThrow('Failed to read KeePass secret: Wrong password');
     });

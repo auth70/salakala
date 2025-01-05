@@ -231,8 +231,9 @@ Uses the Infisical CLI to fetch secrets.
 ### KeePass/KeePassXC (`kp://`)
 Uses the KeePassXC CLI to fetch secrets from a KeePass database.
 - Format: `kp://path/to/database.kdbx/entry-path/field`
-- Example: `kp:///Users/me/secrets.kdbx/Web/GitHub/password`
-- Supported fields: `password`, `username`, `url`, `notes`, or any custom field
+- Example: `kp:///Users/me/secrets.kdbx/Web/GitHub/Password`
+- Supported fields: `Password`, `UserName`, `URL`, `Notes`, or any custom field
+- To find field titles, you can use the `keepassxc-cli` command: `keepassxc-cli show "/path/to/database.kdbx" "entry-name"`
 - Requirements:
   - KeePassXC CLI (`keepassxc-cli`) installed
   - Valid KeePass database file (.kdbx)
