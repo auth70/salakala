@@ -26,6 +26,11 @@ export class CliResponse {
     }
 }
 
+function prune(str: string) {
+    // Censor things in `--session=""`
+    return str.replace(/--session="[^"]*"/g, '--session="****"');
+}
+
 export class CliHandler {
     run(command: string, options: {
         env?: NodeJS.ProcessEnv;
@@ -43,7 +48,7 @@ export class CliHandler {
         const textDecoder = new TextDecoder();
 
         return new Promise((resolve, reject) => {
-            console.log(`🔒🐟 Running command: ${command}`);
+            console.log(`🔒🐟 Running command: ${prune(command)}`);
 
             const child = spawn(command, {
                 shell: true,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SecretsManager } from '../src/lib/SecretProvider.js';
+import { SecretsManager } from '../src/lib/SecretsManager.js';
 import { escapeEnvValue } from '../src/lib/envEscape.js';
 import { readFileSync } from 'fs';
 
