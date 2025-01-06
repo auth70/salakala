@@ -43,9 +43,24 @@ jobs:
       run: |
         echo '${{ secrets.GOOGLE_TEST_SERVICE_KEY }}' > /tmp/google-credentials.json
     
-    - name: Set 1Password service account token
+    - name: Set 1Password service account token and install op
+      uses: 1password/load-secrets-action/configure@v2
+      with:
+        service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+
+    - name: Install op
       run: |
-        echo "OP_SERVICE_ACCOUNT_TOKEN=${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}" >> $GITHUB_ENV
+        curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+        sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg && \
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" | \
+        sudo tee /etc/apt/sources.list.d/1password.list && \
+        sudo mkdir -p /etc/debsig/policies/AC2D62742012EA22/ && \
+        curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol | \
+        sudo tee /etc/debsig/policies/AC2D62742012EA22/1password.pol && \
+        sudo mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22 && \
+        curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+        sudo gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg && \
+        sudo apt update && sudo apt install 1password-cli
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
