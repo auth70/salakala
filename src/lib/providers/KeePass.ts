@@ -112,7 +112,6 @@ export class KeePassProvider extends SecretProvider {
         const response = await this.cli.run(`keepassxc-cli show -a "${attribute}" "${dbPath}" "${entryName}"`, {
             password: password,
             passwordPrompt: 'Enter password to unlock',
-            debug: true
         });
 
         if (response.state !== 'ok') {
