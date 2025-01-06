@@ -15,21 +15,13 @@ But teams always have a shared secret or password manager (1Password, Bitwarden,
 What if you just had a nice little JSON file in your code repository that defined which environment variables to fetch from any manager?
 
 ```json
+// salakala.json
 {
-    "development": {
-        "SECRET_ENV_VALUE": "op://application-secrets/test/test-section",
-        "SECRET_ENV_VALUE_2": "lp://application-secrets/test/test-section",
-        "SECRET_ENV_VALUE_3": "awssm://us-east-1/application-secrets/test/test-section"
-    },
-    "staging": {
-        "SECRET_ENV_VALUE": "op://application-secrets/staging/test-section",
-        "SECRET_ENV_VALUE_2": "lp://application-secrets/staging/test-section",
-        "SECRET_ENV_VALUE_3": "awssm://us-east-1/application-secrets/staging/test-section"
-    }
+    "DATABASE_URL": "op://application-secrets/db/url"
 }
 ```
 
-salakala does exactly that! It wraps around your secrets manager and generates `.env` files from the secrets you define in your `salakala.json` file. As long as you're logged in to the manager you're using, it should just work.
+salakala does exactly that! It wraps around your secrets manager and generates environment variables from secrets you define as URIs. While logged in to the manager you're using, it should just work.
 
 ## Installation
 
@@ -62,20 +54,21 @@ salakala --help
 
 salakala is fresh and under development! Please report any issues you find. If you want to add support for a new provider, please open an issue or a PR.
 
-### Example salakala.json
+### Examples
 
 #### Flat structure (no environment specific secrets)
 
 ```json
+// salakala.json
 {
-    "SECRET_ENV_VALUE": "op://application-secrets/test/test-section",
-    "SECRET_ENV_VALUE2": "op://application-secrets/test/test-section"
+    "SECRET_ENV_VALUE": "op://application-secrets/test/test-section"
 }
 ```
 
 #### Nested structure (environment specific secrets)
 
 ```json
+// salakala.json
 {
     "development": {
         "SECRET_ENV_VALUE": "op://application-secrets/test/test-section"
@@ -88,66 +81,49 @@ salakala is fresh and under development! Please report any issues you find. If y
 
 #### Using environment variables in secret paths
 
-You can use environment variables in your secret paths using `${VARIABLE_NAME}` syntax. This is useful when you need to dynamically configure parts of the secret path:
+You can use environment variables in your secret paths using `${VARIABLE_NAME}` syntax:
 
 ```json
+// salakala.json
 {
     "development": {
-        "GCP_API_KEY": "gcsm://projects/${PROJECT_ID}/secrets/api-key/versions/latest",
-        "AWS_SECRET": "awssm://${AWS_REGION}/application/${ENV}/secret",
-        "AZURE_CONFIG": "azurekv://${VAULT_NAME}.vault.azure.net/config"
+        "GCP_API_KEY": "gcsm://projects/${PROJECT_ID}/secrets/api-key/versions/latest"
     }
 }
 ```
 
-The environment variables must be set before running salakala. For example:
+The environment variables must of course be set before running:
 
 ```bash
-# Set the variables
-export PROJECT_ID=my-project
-export AWS_REGION=us-east-1
-export ENV=development
-export VAULT_NAME=my-vault
-
-# Run salakala
-salakala
+PROJECT_ID=my-project salakala
 ```
-
-If a referenced environment variable is not defined, salakala will throw an error indicating which variable is missing.
 
 #### Using non-secret values
 
-You can also include regular, non-secret values in your `salakala.json`. Any value that doesn't start with a provider prefix (like `op://`, `gcsm://`, etc.) will be passed through directly to the `.env` file:
+You can also include regular, non-secret values. Any value that doesn't start with a provider prefix (like `op://`, `gcsm://`, etc.) will be passed through:
 
 ```json
 {
     "development": {
         "DB_PASSWORD": "op://vault/database/password",
-        "API_KEY": "gcsm://projects/my-project/secrets/api-key/versions/latest",
         "APP_NAME": "My Development App",
-        "DEBUG": "true",
-        "PORT": "3000",
-        "API_URL": "https://api.example.com"
     }
 }
 ```
 
 In this example:
-- `DB_PASSWORD` and `API_KEY` will be fetched from their respective secret managers
-- `APP_NAME`, `DEBUG`, `PORT`, and `API_URL` will be passed through directly to the `.env` file
+- `DB_PASSWORD` will be fetched from the secret manager
+- `APP_NAME` will be passed through directly to the generated environment variables
 
-This is useful for mixing configuration values that don't need to be stored in a secrets manager with those that do.
-
-#### Binary content
-
-salakala will try to automatically detect if a secret is binary with providers that support it, and will output it as a base64 encoded string in the `.env` file.
-
-## Supported Providers
+## Providers
 
 <details>
 <summary><b>1Password <code>(op://)</code></b></summary>
 
 Uses the 1Password CLI to fetch secrets.
+
+**Status:**
+✅ Working; tested against a real 1Password account in CI
 
 **Format:**
 
@@ -172,6 +148,9 @@ op://Personal/AWS/access-key
 
 Uses the LastPass CLI to fetch secrets.
 
+**Status:**
+❌ Needs testing
+
 **Format:**
 ```
 lp://group/item-name[/field]
@@ -192,6 +171,9 @@ lp://Personal/AWS/api-key
 
 Uses the Bitwarden CLI to fetch secrets.
 
+**Status:**
+❌ Needs testing
+
 **Format:**
 ```
 bw://item-id/field
@@ -211,6 +193,9 @@ bw://9c9448b3-3d30-4e01-8d3c-3a4b8d14d00a/password
 <summary><b>AWS Secrets Manager <code>(awssm://)</code></b></summary>
 
 Fetches secrets from AWS Secrets Manager.
+
+**Status:**
+✅ Working; tested against a real AWS account in CI
 
 **Format:**
 ```
@@ -243,6 +228,9 @@ awssm://us-east-1/prod/database:password
 
 Fetches secrets from Google Cloud Secret Manager.
 
+**Status:**
+✅ Working; tested against a real Google Cloud project in CI
+
 **Format:**
 ```
 gcsm://projects/project-id/secrets/secret-id/versions/version[:key]
@@ -273,6 +261,9 @@ gcsm://projects/my-project/secrets/database/versions/latest:password
 
 Fetches secrets from Azure Key Vault.
 
+**Status:**
+❌ Needs testing
+
 **Format:**
 ```
 azurekv://vault-name.vault.azure.net/secret-name
@@ -292,6 +283,9 @@ azurekv://my-vault.vault.azure.net/database-password
 <summary><b>HashiCorp Vault <code>(hcv://)</code></b></summary>
 
 Fetches secrets from HashiCorp Vault.
+
+**Status:**
+❌ Needs testing
 
 **Format:**
 ```
@@ -317,6 +311,9 @@ hcv://vault.example.com:8200/secret/data/database/credentials
 
 Uses the GitHub CLI to fetch repository secrets.
 
+**Status:**
+❌ Needs testing
+
 **Format:**
 ```
 ghs://owner/repo/secret-name
@@ -338,6 +335,9 @@ ghs://auth70/salakala/API_KEY
 
 Uses the Doppler CLI to fetch secrets.
 
+**Status:**
+❌ Needs testing
+
 **Format:**
 ```
 doppler://project/config/secret-name
@@ -358,6 +358,9 @@ doppler://my-project/dev/DATABASE_URL
 
 Uses the Infisical CLI to fetch secrets.
 
+**Status:**
+❌ Needs testing
+
 **Format:**
 ```
 inf://workspace/environment/secret-name
@@ -377,6 +380,9 @@ inf://my-project/dev/DATABASE_URL
 <summary><b>KeePassXC <code>(kp://)</code></b></summary>
 
 Uses the KeePassXC CLI to fetch secrets from a KeePass database.
+
+**Status:**
+✅ Working; tested against a real KeePass database in CI
 
 **Format:**
 ```
