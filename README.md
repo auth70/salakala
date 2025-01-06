@@ -6,13 +6,11 @@
   <a href="https://www.npmjs.com/package/salakala"><img src="https://img.shields.io/npm/types/salakala" alt="npm type definitions"></a>
 </p>
 
-We've all been there, sharing `.env` files in Slack to get a Javascript application quickly working on someone's local machine while feeling bad about security practices. 🫠
+We've all been there, sharing `.env` files in Slack to get an application working quickly while feeling bad about security practices. 🫠
 
-But teams always have a shared secret or password manager (1Password, Bitwarden, Google Secrets Manager, AWS Secrets Manager, etc)...
+But teams always have a shared secret or password manager, and you already have a way to access it through a CLI or service account, right?
 
-... and you're almost always logged in to it in some form (CLI, service account, etc), right?
-
-What if you just had a nice little JSON file in your code repository that defined which environment variables to fetch from any manager?
+What if you just had a nice little JSON file in your code repository that defined which environment variables to fetch from any manager through URIs?
 
 ```json
 // salakala.json
@@ -21,7 +19,7 @@ What if you just had a nice little JSON file in your code repository that define
 }
 ```
 
-salakala does exactly that! It wraps around your secrets manager and generates environment variables from secrets you define as URIs. While logged in to the manager you're using, it should just work.
+salakala does exactly that! It wraps around your manager and generates environment variables for you as `.env` files or by setting variables directly in your environment.
 
 ## Installation
 
@@ -32,14 +30,17 @@ npm install -g salakala
 
 ## Usage
 
-1. Create a `salakala.json` file in your project (this file is safe to commit to your repository)
-2. Run salakala to generate your `.env` file:
+1. Create a `salakala.json` file in your project (safe to commit to your repository!)
+2. Run salakala to generate your `.env` file or set environment variables:
 
 ```bash
-# Generate .env for development (default)
+# Generate .env file in the current directory (default)
 salakala
 
-# Or specify an environment
+# Set environment variables in the current shell
+salakala -s
+
+# Specify an environment
 salakala -e staging
 
 # Specify a different output file
@@ -51,8 +52,6 @@ salakala -w
 # Show help
 salakala --help
 ```
-
-salakala is fresh and under development! Please report any issues you find. If you want to add support for a new provider, please open an issue or a PR.
 
 ### Examples
 

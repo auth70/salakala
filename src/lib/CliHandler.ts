@@ -172,7 +172,7 @@ export class CliHandler {
                     // Censor output after password prompt and user input
                     if (passwordPromptSeen && userInputSeen && !line.includes(options.passwordPrompt || '')) {
                         if(options.debug) console.log(`🐛 Censoring output after password prompt and user input`);
-                        line = '';
+                        line = '\n';
                     }
                     process[type].write(textEncoder.encode(line));
                     if(!passwordPromptSeen && !userInputSeen) {
