@@ -43,6 +43,10 @@ jobs:
       run: |
         echo '${{ secrets.GOOGLE_TEST_SERVICE_KEY }}' > /tmp/google-credentials.json
     
+    - name: Set 1Password service account token
+      run: |
+        echo "OP_SERVICE_ACCOUNT_TOKEN=${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}" >> $GITHUB_ENV
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
