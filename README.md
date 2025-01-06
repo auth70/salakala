@@ -307,30 +307,6 @@ hcv://vault.example.com:8200/secret/data/database/credentials
 </details>
 
 <details>
-<summary><b>GitHub Secrets <code>(ghs://)</code></b></summary>
-
-Uses the GitHub CLI to fetch repository secrets.
-
-**Status:**
-❌ Needs testing
-
-**Format:**
-```
-ghs://owner/repo/secret-name
-```
-
-**Example:**
-```
-ghs://auth70/salakala/API_KEY
-```
-
-**Requirements:**
-  - GitHub CLI (`gh`) installed
-  - Logged in to GitHub CLI
-  - Appropriate repository access permissions
-</details>
-
-<details>
 <summary><b>Doppler <code>(doppler://)</code></b></summary>
 
 Uses the Doppler CLI to fetch secrets.

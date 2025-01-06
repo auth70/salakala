@@ -9,7 +9,6 @@ import { LastPassProvider } from "./providers/LastPass.js";
 import { DopplerProvider } from "./providers/Doppler.js";
 import { InfisicalProvider } from "./providers/Infisical.js";
 import { KeePassProvider } from "./providers/KeePass.js";
-import { GitHubSecretsProvider } from "./providers/GitHubSecrets.js";
 
 /**
  * Interface for secret management providers.
@@ -71,7 +70,6 @@ export class SecretsManager {
             ['doppler://', new DopplerProvider()],
             ['inf://', new InfisicalProvider()],
             ['kp://', new KeePassProvider()],
-            ['ghs://', new GitHubSecretsProvider()],
         ]);
     }
 
