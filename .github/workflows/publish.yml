@@ -13,6 +13,9 @@ jobs:
       GOOGLE_TEST_SERVICE_KEY: ${{ secrets.GOOGLE_TEST_SERVICE_KEY }}
       GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      BW_CLIENTID: ${{ secrets.BW_CLIENTID }}
+      BW_CLIENTSECRET: ${{ secrets.BW_CLIENTSECRET }}
+      BW_PASSWORD: ${{ secrets.BW_PASSWORD }}
 
   publish:
     needs: test
