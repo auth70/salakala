@@ -120,13 +120,26 @@ export class CliHandler {
 
             let stdout = '', stderr = '';
             let lineAtPasswordPrompt = '';
+            let lastLine = '';
 
             function handleStd(data: Buffer, type: 'stdout' | 'stderr') {
                 const prunedData = prune(textDecoder.decode(data));
                 let line = prunedData;
-                if (options.debug) {
-                    console.log(`[spawn:${type}] ${line}`);
+                
+                // Strip control codes and newlines before comparing lines
+                const stripControlCodes = (str: string) => str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/[\r\n]/g, '');
+                const currentLineStripped = stripControlCodes(line.trim());
+                const lastLineStripped = stripControlCodes(lastLine.trim());
+
+                if(currentLineStripped === '') {
+                    return;
                 }
+                
+                // Skip if this is the same line we just processed or if it's an empty line
+                if (currentLineStripped === lastLineStripped) {
+                    return;
+                }
+
                 // Handle password input in non-interactive mode
                 if (
                     !options.interactive &&
@@ -161,7 +174,7 @@ export class CliHandler {
                         if(options.debug) console.log(`🐛 Censoring output after password prompt and user input`);
                         line = '';
                     }
-                    type === 'stdout' ? process.stdout.write(textEncoder.encode(line)) : process.stderr.write(textEncoder.encode(line));
+                    process[type].write(textEncoder.encode(line));
                     if(!passwordPromptSeen && !userInputSeen) {
                         if(options.debug) console.log(`🐛 Adding to ${type}: ${line}`);
                         type === 'stdout' ? stdout += line : stderr += line;
@@ -172,6 +185,7 @@ export class CliHandler {
                         type === 'stdout' ? options.onStdout?.(prunedData) : options.onStderr?.(prunedData);
                     }
                 }
+                lastLine = line;
             }
 
             child.stdout?.on('data', (data) => {
