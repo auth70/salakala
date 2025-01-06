@@ -15,10 +15,11 @@ import { CliPasswordHandler } from '../CliPasswordHandler.js';
  * @implements {SecretProvider}
  * @see {@link https://keepassxc.org/docs/KeePassXC_GettingStarted.html#_using_keepassxc_cli} for CLI documentation
  */
-export class KeePassProvider implements SecretProvider {
+export class KeePassProvider extends SecretProvider {
     private cliHandler: CliPasswordHandler;
 
     constructor(password?: string) {
+        super();
         this.cliHandler = new CliPasswordHandler(password);
     }
 

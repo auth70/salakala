@@ -3,12 +3,13 @@
     "bin": {
         "salakala": "./dist/cli.js"
     },
-    "version": "0.4.3",
+    "version": "0.5.0",
     "description": "Generate .env files from various secret providers",
     "type": "module",
     "scripts": {
         "build": "tsc",
         "test": "vitest run",
+        "test:debug": "vitest run --disable-console-intercept",
         "prepare": "npm run build"
     },
     "homepage": "https://github.com/auth70/salakala",

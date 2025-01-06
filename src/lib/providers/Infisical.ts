@@ -17,7 +17,7 @@ import { SecretProvider } from '../SecretProvider.js';
  * @implements {SecretProvider}
  * @see {@link https://infisical.com/docs/cli/overview} for Infisical CLI documentation
  */
-export class InfisicalProvider implements SecretProvider {
+export class InfisicalProvider extends SecretProvider {
     /**
      * Flag indicating whether we have successfully authenticated in this session.
      * @private

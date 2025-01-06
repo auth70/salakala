@@ -16,7 +16,7 @@ import { execSync } from 'child_process';
  * @see {@link https://docs.aws.amazon.com/secretsmanager/} for AWS Secrets Manager documentation
  * @see {@link https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-secrets-manager/} for SDK documentation
  */
-export class AWSSecretsManagerProvider implements SecretProvider {
+export class AWSSecretsManagerProvider extends SecretProvider {
     /**
      * Cache of AWS Secrets Manager clients for different regions to avoid
      * recreating clients for the same region.
@@ -27,6 +27,7 @@ export class AWSSecretsManagerProvider implements SecretProvider {
      * Initializes a new AWSSecretsManagerProvider with an empty client cache.
      */
     constructor() {
+        super();
         this.clients = new Map();
     }
 

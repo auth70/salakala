@@ -13,7 +13,7 @@ import vault from 'node-vault';
  * @implements {SecretProvider}
  * @see {@link https://www.vaultproject.io/docs/secrets/kv} for Vault KV documentation
  */
-export class HashiCorpVaultProvider implements SecretProvider {
+export class HashiCorpVaultProvider extends SecretProvider {
     /**
      * Cache of Vault clients for different addresses to avoid recreating clients
      * for the same Vault instance.
@@ -24,6 +24,7 @@ export class HashiCorpVaultProvider implements SecretProvider {
      * Initializes a new HashiCorpVaultProvider with an empty client cache.
      */
     constructor() {
+        super();
         this.clients = new Map();
     }
 

@@ -17,7 +17,7 @@ import { SecretProvider } from '../SecretProvider.js';
  * @implements {SecretProvider}
  * @see {@link https://docs.doppler.com/docs/cli} for Doppler CLI documentation
  */
-export class DopplerProvider implements SecretProvider {
+export class DopplerProvider extends SecretProvider {
     /**
      * Flag indicating whether we have successfully authenticated in this session.
      * @private

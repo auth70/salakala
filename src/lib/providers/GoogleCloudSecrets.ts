@@ -16,7 +16,7 @@ import { SecretProvider } from '../SecretProvider.js';
  * @see {@link https://cloud.google.com/secret-manager/docs} for Google Cloud Secret Manager documentation
  * @see {@link https://github.com/googleapis/nodejs-secret-manager} for client library documentation
  */
-export class GoogleCloudSecretsProvider implements SecretProvider {
+export class GoogleCloudSecretsProvider extends SecretProvider {
     /**
      * Client instance for interacting with Google Cloud Secret Manager.
      * A single client is used as it handles multiple projects and regions internally.
@@ -28,6 +28,7 @@ export class GoogleCloudSecretsProvider implements SecretProvider {
      * The client will use Application Default Credentials for authentication.
      */
     constructor() {
+        super();
         this.client = new SecretManagerServiceClient();
     }
     

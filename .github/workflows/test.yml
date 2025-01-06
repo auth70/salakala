@@ -13,6 +13,12 @@ on:
         required: true
       OP_SERVICE_ACCOUNT_TOKEN:
         required: true
+      BW_CLIENTID:
+        required: true
+      BW_CLIENTSECRET:
+        required: true
+      BW_PASSWORD:
+        required: true
   push:
     branches: [ main ]
   pull_request:
@@ -79,5 +85,9 @@ jobs:
       env:
         GOOGLE_APPLICATION_CREDENTIALS: /tmp/google-credentials.json
         GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
+        BW_CLIENTID: ${{ secrets.BW_CLIENTID }}
+        BW_CLIENTSECRET: ${{ secrets.BW_CLIENTSECRET }}
+        BW_PASSWORD: ${{ secrets.BW_PASSWORD }}
+        BW_SERVER: https://vault.bitwarden.eu
         AWS_REGION: us-east-1
       run: npm test 

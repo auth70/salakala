@@ -120,10 +120,13 @@ In this example:
 <details>
 <summary><b>1Password <code>(op://)</code></b></summary>
 
-Uses the 1Password CLI to fetch secrets.
+<hr>
 
-**Status:**
-✅ Working; tested against a real 1Password account in CI
+Uses the 1Password CLI to fetch secrets. Requires the `op` CLI to be installed.
+
+✅ Tested against a real 1Password account in CI
+🧑‍💻 Interactive login via invoking `op`
+🤖 Noninteractive login using environment variables
 
 **Format:**
 
@@ -135,67 +138,86 @@ op://vault-name/item-name/[section-name/]field-name
 ```
 op://Personal/AWS/access-key
 ```
+<hr>
 
-**Requirements:**
-
-- 1Password CLI (`op`) installed
-- Logged in to 1Password CLI
-
-</details>
-
-<details>
-<summary><b>LastPass <code>(lp://)</code></b></summary>
-
-Uses the LastPass CLI to fetch secrets.
-
-**Status:**
-❌ Needs testing
-
-**Format:**
-```
-lp://group/item-name[/field]
-```
-
-**Example:**
-```
-lp://Personal/AWS/api-key
-```
-
-**Requirements:**
-  - LastPass CLI (`lpass`) installed
-  - Logged in to LastPass CLI
 </details>
 
 <details>
 <summary><b>Bitwarden <code>(bw://)</code></b></summary>
 
-Uses the Bitwarden CLI to fetch secrets.
+<hr>
 
-**Status:**
-❌ Needs testing
+Uses the Bitwarden CLI (`bw`) to fetch secrets. Requires the `bw` CLI to be installed. Supports different vault locations.
+
+✅ Tested against a real Bitwarden account in CI
+🧑‍💻 Interactive login via invoking `bw`
+🤖 Noninteractive login using environment variables
 
 **Format:**
 ```
-bw://item-id/field
+bw://[folder]/item-name-or-id/field::json-key
+```
+
+**Example: Plaintext field via item ID:**
+```
+bw://1c9448b3-3d30-4f01-8d3c-3a4b8d14d00a/password
+```
+
+**Example: Plaintext field via item name:**
+```
+bw://my-folder/my-item/password
+```
+
+**Example: JSON field via item name:**
+```
+bw://my-folder/my-item/notes::foo.bar[1]
+```
+<small><i>This expects that the item has a `notes` field that is a JSON object. It will return the value of the `foo.bar[1]` key.</i></small>
+
+**Example: URI from a login item:**
+```
+bw://my-folder/my-item/uris/0
+```
+<small><i>This would get the first URI from the `uris` field.</i></small>
+<hr>
+</details>
+
+<details>
+<summary><b>KeePassXC <code>(kp://)</code></b></summary>
+
+<hr>
+Uses the KeePassXC CLI to fetch secrets from a KeePass database. Requires the `keepassxc-cli` CLI to be installed.
+
+✅ Tested against a real KeePass database in CI
+🧑‍💻 Interactive login via invoking `keepassxc-cli`
+🤖 Noninteractive login using environment variables
+
+**Format:**
+```
+kp://path/to/database.kdbx/entry-path/field
 ```
 
 **Example:**
 ```
-bw://9c9448b3-3d30-4e01-8d3c-3a4b8d14d00a/password
+kp:///Users/me/secrets.kdbx/Web/GitHub/Password
 ```
 
-**Requirements:**
-  - Bitwarden CLI (`bw`) installed
-  - Logged in to Bitwarden CLI
+**Notes:**
+- To find field titles, you can use the `keepassxc-cli` command: `keepassxc-cli show "/path/to/database.kdbx" "entry-name"`
+
+<hr>
 </details>
 
 <details>
 <summary><b>AWS Secrets Manager <code>(awssm://)</code></b></summary>
 
-Fetches secrets from AWS Secrets Manager.
+<hr>
 
-**Status:**
-✅ Working; tested against a real AWS account in CI
+Fetches secrets from AWS Secrets Manager. Requires some form of AWS credentials to be configured. Uses the AWS SDK to fetch secrets.
+
+✅ Tested against a real AWS account in CI
+🧑‍💻 Semi-interactive login
+🤖 Noninteractive login using environment variables
 
 **Format:**
 ```
@@ -211,25 +233,28 @@ awssm://us-east-1/prod/api-key
 ```
 awssm://us-east-1/prod/database
 ```
+<small><i>This will fetch the entire JSON object in the `database` secret and pass it through as a JSON string.</i></small>
 
 **Example: Specific key in JSON object:**
 ```
-awssm://us-east-1/prod/database:password
+awssm://us-east-1/prod/database::password
 ```
+<small><i>This will fetch the `password` key from the JSON object in the `database` secret.</i></small>
 
-**Requirements:**
-  - AWS credentials configured (environment variables, credentials file, or IAM role)
-  - Appropriate IAM permissions for `secretsmanager:GetSecretValue`
+<hr>
 
 </details>
 
 <details>
 <summary><b>Google Cloud Secret Manager <code>(gcsm://)</code></b></summary>
 
-Fetches secrets from Google Cloud Secret Manager.
+<hr>
 
-**Status:**
-✅ Working; tested against a real Google Cloud project in CI
+Fetches secrets from Google Cloud Secret Manager. Requires Google Cloud credentials to be configured. Uses the Google Cloud SDK to fetch secrets.
+
+✅ Tested against a real Google Cloud project in CI
+🧑‍💻 Semi-interactive login
+🤖 Noninteractive login using environment variables
 
 **Format:**
 ```
@@ -245,23 +270,46 @@ gcsm://projects/my-project/secrets/api-key/versions/latest
 ```
 gcsm://projects/my-project/secrets/database/versions/latest
 ```
+<small><i>This will fetch the entire JSON object in the `database` secret and pass it through as a JSON string.</i></small>
 
 **Example: Specific key in JSON object:**
 ```
-gcsm://projects/my-project/secrets/database/versions/latest:password
+gcsm://projects/my-project/secrets/database/versions/latest::password
+```
+<small><i>This will fetch the `password` key from the JSON object in the `database` secret.</i></small>
+
+<hr>
+</details>
+
+<details>
+<summary><b>LastPass <code>(lp://)</code></b></summary>
+
+<hr>
+
+Uses the LastPass CLI to fetch secrets. Requires the `lpass` CLI to be installed.
+
+❌ Needs testing
+
+**Format:**
+```
+lp://group/item-name[/field]
 ```
 
-**Requirements:**
-  - Google Cloud credentials configured (service account key file via GOOGLE_APPLICATION_CREDENTIALS or gcloud CLI login)
-  - Appropriate IAM permissions for `secretmanager.versions.access`
+**Example:**
+```
+lp://Personal/AWS/api-key
+```
+
+<hr>
 </details>
 
 <details>
 <summary><b>Azure Key Vault <code>(azurekv://)</code></b></summary>
 
-Fetches secrets from Azure Key Vault.
+<hr>
 
-**Status:**
+Fetches secrets from Azure Key Vault. Requires Azure credentials to be configured. Uses the Azure SDK to fetch secrets.
+
 ❌ Needs testing
 
 **Format:**
@@ -274,17 +322,16 @@ azurekv://vault-name.vault.azure.net/secret-name
 azurekv://my-vault.vault.azure.net/database-password
 ```
 
-**Requirements:**
-  - Azure credentials configured (uses DefaultAzureCredential)
-  - Appropriate access policies
+<hr>
 </details>
 
 <details>
 <summary><b>HashiCorp Vault <code>(hcv://)</code></b></summary>
 
-Fetches secrets from HashiCorp Vault.
+<hr>
 
-**Status:**
+Fetches secrets from HashiCorp Vault. Requires the `VAULT_ADDR` and `VAULT_TOKEN` environment variables to be set. Uses the HashiCorp Vault SDK to fetch secrets.
+
 ❌ Needs testing
 
 **Format:**
@@ -297,21 +344,17 @@ hcv://vault-address/secret/path
 hcv://vault.example.com:8200/secret/data/database/credentials
 ```
 
-**Requirements:**
-  - Vault server accessible
-  - `VAULT_ADDR` and `VAULT_TOKEN` environment variables set
-
-**Notes:**
-- Supports both KV v1 and v2 secret engines
+<hr>
 
 </details>
 
 <details>
 <summary><b>Doppler <code>(doppler://)</code></b></summary>
 
-Uses the Doppler CLI to fetch secrets.
+<hr>
 
-**Status:**
+Uses the Doppler CLI to fetch secrets. Requires the Doppler CLI to be installed.
+
 ❌ Needs testing
 
 **Format:**
@@ -324,17 +367,16 @@ doppler://project/config/secret-name
 doppler://my-project/dev/DATABASE_URL
 ```
 
-**Requirements:**
-  - Doppler CLI installed
-  - Logged in to Doppler CLI (`doppler login`)
+<hr>
 </details>
 
 <details>
 <summary><b>Infisical <code>(inf://)</code></b></summary>
 
-Uses the Infisical CLI to fetch secrets.
+<hr>
 
-**Status:**
+Uses the Infisical CLI to fetch secrets. Requires the Infisical CLI to be installed.
+
 ❌ Needs testing
 
 **Format:**
@@ -347,55 +389,15 @@ inf://workspace/environment/secret-name
 inf://my-project/dev/DATABASE_URL
 ```
 
-**Requirements:**
-  - Infisical CLI installed
-  - Logged in to Infisical CLI (`infisical login`)
+<hr>
 </details>
 
-<details>
-<summary><b>KeePassXC <code>(kp://)</code></b></summary>
-
-Uses the KeePassXC CLI to fetch secrets from a KeePass database.
-
-**Status:**
-✅ Working; tested against a real KeePass database in CI
-
-**Format:**
-```
-kp://path/to/database.kdbx/entry-path/field
-```
-
-**Example:**
-```
-kp:///Users/me/secrets.kdbx/Web/GitHub/Password
-```
-
-**Requirements:**
-  - KeePassXC CLI (`keepassxc-cli`) installed
-  - Valid KeePass database file (.kdbx)
-  - Database password will be prompted when accessing secrets
-
-**Notes:**
-- To find field titles, you can use the `keepassxc-cli` command: `keepassxc-cli show "/path/to/database.kdbx" "entry-name"`
-
-</details>
 
 ## Recommendations
 
-1. **Version Control**:
-   - ✅ DO commit `salakala.json` - it should only contain paths to secrets, not the secrets themselves
-   - ❌ DON'T commit generated `.env` files
-   - Add `.env*` to your `.gitignore`
-
-2. **Security**:
-   - Use different secret paths for different environments
-   - Ensure developers only have access to development secrets
-   - Consider using separate vaults/groups for different environments
-
-3. **Team Workflow**:
-   - Document which secret managers your team uses (once implemented, searching through salakala.json files will show you which ones are used!)
-   - Include provider setup instructions in your project README
-   - Consider using a single provider per project if possible
+- ✅ DO commit `salakala.json` - it should only contain paths to secrets, not the secrets themselves
+- ❌ DON'T commit generated `.env` files
+- Add `.env*` to your `.gitignore`
 
 ## Contributing
 

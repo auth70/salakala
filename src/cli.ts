@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { writeFileSync, readFileSync, existsSync } from 'fs';
-import { SecretsManager } from './lib/SecretProvider.js';
+import { SecretsManager } from './lib/SecretsManager.js';
 import { program } from '@commander-js/extra-typings';
 import { escapeEnvValue } from './lib/envEscape.js';
 

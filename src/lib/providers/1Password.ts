@@ -13,7 +13,7 @@ import { SecretProvider } from '../SecretProvider.js';
  * @implements {SecretProvider}
  * @see {@link https://developer.1password.com/docs/cli/reference} for 1Password CLI documentation
  */
-export class OnePasswordProvider implements SecretProvider {
+export class OnePasswordProvider extends SecretProvider {
     /**
      * Cached session token for reuse across multiple secret retrievals.
      * @private
@@ -21,6 +21,7 @@ export class OnePasswordProvider implements SecretProvider {
     private sessionToken: string | null = null;
 
     constructor() {
+        super();
         // Use service account token if available
         if (process.env.OP_SERVICE_ACCOUNT_TOKEN) {
             this.sessionToken = process.env.OP_SERVICE_ACCOUNT_TOKEN;

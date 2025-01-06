@@ -16,7 +16,7 @@ import { execSync } from 'child_process';
  * @see {@link https://docs.microsoft.com/azure/key-vault/} for Azure Key Vault documentation
  * @see {@link https://docs.microsoft.com/javascript/api/overview/azure/identity-readme} for authentication details
  */
-export class AzureKeyVaultProvider implements SecretProvider {
+export class AzureKeyVaultProvider extends SecretProvider {
     /**
      * Cache of Secret Clients for different vault URLs to avoid recreating clients
      * for the same vault instance.
@@ -27,6 +27,7 @@ export class AzureKeyVaultProvider implements SecretProvider {
      * Initializes a new AzureKeyVaultProvider with an empty client cache.
      */
     constructor() {
+        super();
         this.clients = new Map();
     }
 

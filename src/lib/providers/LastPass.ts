@@ -11,7 +11,7 @@ import { SecretProvider } from '../SecretProvider.js';
  * @implements {SecretProvider}
  * @see {@link https://github.com/lastpass/lastpass-cli} for LastPass CLI documentation
  */
-export class LastPassProvider implements SecretProvider {
+export class LastPassProvider extends SecretProvider {
     /**
      * Flag indicating whether we have successfully authenticated in this session.
      * @private
