@@ -56,7 +56,7 @@ jobs:
 
     - name: Install bw
       run: |
-        curl -s https://get.bitwarden.com | bash
+        npm install -g @bitwarden/cli
 
     - name: Install op
       run: |
