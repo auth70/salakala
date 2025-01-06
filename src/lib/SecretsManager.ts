@@ -129,19 +129,15 @@ export class SecretsManager {
             const provider = this.providers.get(prefix)!;
             for (const [envVar, secretPath] of secretGroup.entries()) {
                 try {
-                    console.info(`Getting value for ${envVar} from ${secretPath}`);
+                    console.info(`🔒 Fetching ${envVar} from ${secretPath}`);
                     const secretValue = await provider.getSecret(secretPath);
                     secrets[envVar] = secretValue;
                 } catch (error: unknown) {
                     const err = error instanceof Error ? error.message : String(error);
-                    errors.push(new Error(`Failed to get value for ${envVar} using ${secretPath}:\n- ${err}`));
+                    // If an error occurs, throw it immediately
+                    throw new Error(`Failed to get value for ${envVar} using ${secretPath}:\n- ${err}`);
                 }
             }
-        }
-
-        // If any errors occurred, throw them all together
-        if (errors.length > 0) {
-            throw new Error(errors.map(e => e.message).join('\n'));
         }
 
         return secrets;

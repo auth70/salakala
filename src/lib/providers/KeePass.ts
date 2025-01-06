@@ -1,6 +1,5 @@
-import { execSync } from 'child_process';
 import { SecretProvider } from '../SecretProvider.js';
-import { CliPasswordHandler } from '../CliPasswordHandler.js';
+import { CliHandler } from '../CliHandler.js';
 
 /**
  * Provider for accessing secrets stored in KeePass databases using the KeePassXC CLI.
@@ -9,18 +8,22 @@ import { CliPasswordHandler } from '../CliPasswordHandler.js';
  * Authentication can be handled via:
  * - Key file (configured in KeePassXC)
  * - Interactive password prompt
- * - Environment variables (if configured in KeePassXC)
- * - Programmatic password input (for testing)
+ * - Environment variables (KEEPASS_PASSWORD)
  * 
  * @implements {SecretProvider}
  * @see {@link https://keepassxc.org/docs/KeePassXC_GettingStarted.html#_using_keepassxc_cli} for CLI documentation
  */
 export class KeePassProvider extends SecretProvider {
-    private cliHandler: CliPasswordHandler;
+    private cli: CliHandler;
+    private password: string | null = null;
 
-    constructor(password?: string) {
+    constructor() {
         super();
-        this.cliHandler = new CliPasswordHandler(password);
+        this.cli = new CliHandler();
+        // Use password from environment if available
+        if (process.env.KEEPASS_PASSWORD) {
+            this.password = process.env.KEEPASS_PASSWORD;
+        }
     }
 
     /**
@@ -59,29 +62,74 @@ export class KeePassProvider extends SecretProvider {
         const entryName = parts[dbPathEndIndex + 1];
         const attribute = parts[dbPathEndIndex + 2];
 
-        try {
-            return await this.cliHandler.execute({
-                command: 'keepassxc-cli',
-                args: ['show', '-a', attribute, dbPath, entryName],
-                promptText: 'Enter password',
-                errorHandler: (code, stdout, stderr) => {
-                    if (stderr.includes('Could not find entry')) {
-                        return new Error(`Entry '${entryName}' not found in database '${dbPath}'`);
-                    }
-                    if (stderr.includes('unknown attribute')) {
-                        return new Error(stderr.trim());
-                    }
-                    if (code !== 0) {
-                        return new Error(`Failed to read KeePass secret: ${stderr}`);
-                    }
-                    return undefined;
+        // Try with stored password first if available
+        if (this.password) {
+            try {
+                return await this.getSecretValue(dbPath, entryName, attribute, this.password);
+            } catch (error: unknown) {
+                // If using stored password, or other error, throw directly
+                if (error instanceof Error) {
+                    throw new Error(`Failed to read KeePass secret: ${error.message}`);
                 }
-            });
-        } catch (error) {
-            if (error instanceof Error) {
-                throw error;
+                throw new Error('Failed to read KeePass secret: Unknown error');
             }
-            throw new Error('Failed to read KeePass secret: Unknown error');
+        } else {
+            try {
+                console.log('🔑 KeePassXC needs a password. You are interacting with KeePassXC CLI now.');
+                const response = await this.cli.run(`keepassxc-cli show -a "${attribute}" "${dbPath}" "${entryName}"`, {
+                    interactive: true,
+                    passwordPrompt: 'Enter password to unlock'
+                });
+                if (response.state !== 'ok') {
+                    throw new Error(response.error?.message || response.message || 'Unable to read KeePass secret');
+                }
+                const value = response.stdout.trim();
+                if (!value) {
+                    throw new Error(`No value found for entry '${entryName}' attribute '${attribute}' in database '${dbPath}'`);
+                }
+                return value;
+            } catch (retryError: unknown) {
+                if (retryError instanceof Error) {
+                    throw new Error(`Failed to read KeePass secret: ${retryError.message}`);
+                }
+                throw new Error('Failed to read KeePass secret: Unknown error');
+            }
         }
+    }
+
+    /**
+     * Internal helper method to execute the KeePassXC CLI command and retrieve the secret value.
+     * 
+     * @param {string} dbPath - Path to the KeePass database file
+     * @param {string} entryName - Name of the entry to retrieve
+     * @param {string} attribute - Name of the attribute to retrieve
+     * @param {string} [password] - Optional password for the database
+     * @returns {Promise<string>} The secret value
+     * @throws {Error} If the secret cannot be retrieved or the value is empty
+     * @private
+     */
+    private async getSecretValue(dbPath: string, entryName: string, attribute: string, password?: string): Promise<string> {
+        const response = await this.cli.run(`keepassxc-cli show -a "${attribute}" "${dbPath}" "${entryName}"`, {
+            password: password,
+            passwordPrompt: 'Enter password to unlock',
+            debug: true
+        });
+
+        if (response.state !== 'ok') {
+            if (response.stderr.includes('Could not find entry')) {
+                throw new Error(`Entry '${entryName}' not found in database '${dbPath}'`);
+            }
+            if (response.stderr.includes('unknown attribute')) {
+                throw new Error(response.stderr.trim());
+            }
+            throw new Error(response.error?.message || response.message || 'Unable to read KeePass secret');
+        }
+
+        const value = response.stdout.trim();
+        if (!value) {
+            throw new Error(`No value found for entry '${entryName}' attribute '${attribute}' in database '${dbPath}'`);
+        }
+
+        return value;
     }
 }

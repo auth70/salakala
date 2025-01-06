@@ -186,21 +186,26 @@ export class BitwardenProvider extends SecretProvider {
             }
             this.sessionKey = sessionResponse.stdout;
         } else {
-            console.log('🔒🐟 No BW_CLIENTID, BW_CLIENTSECRET, or BW_PASSWORD found, trying interactive login');
             // Check login status
             const loginStatusResponse = await this.cli.run('bw login --check');
             if(loginStatusResponse.state !== 'ok' || !loginStatusResponse.stdout.includes("You are logged in")) {
                 // Try to login
-                console.log('🔒🐟 Trying to login. You are interacting with Bitwarden CLI now.');
-                const loginResponse = await this.cli.run('bw login --raw', { interactive: true });
+                console.log('🔑 Bitwarden needs to login. You are interacting with Bitwarden CLI now.');
+                const loginResponse = await this.cli.run('bw login --raw', {
+                    interactive: true,
+                    passwordPrompt: 'Master password'
+                });
                 if(loginResponse.state !== 'ok') {
                     throw new Error(loginResponse.error?.message || loginResponse.message || 'Unable to run bw login');
                 }
                 this.sessionKey = loginResponse.stdout;
             } else {
                 // Unlock
-                console.log('🔒🐟 Unlocking session. You are interacting with Bitwarden CLI now.');
-                const sessionResponse = await this.cli.run('bw unlock --raw', { interactive: true });
+                console.log('🔑 Bitwarden needs to unlock your session. You are interacting with Bitwarden CLI now.');
+                const sessionResponse = await this.cli.run('bw unlock --raw', {
+                    interactive: true,
+                    passwordPrompt: 'Master password'
+                });
                 if(sessionResponse.state !== 'ok') {
                     throw new Error(sessionResponse.error?.message || sessionResponse.message || 'Unable to run bw unlock');
                 }

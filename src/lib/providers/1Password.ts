@@ -1,5 +1,5 @@
-import { execSync } from 'child_process';
 import { SecretProvider } from '../SecretProvider.js';
+import { CliHandler } from '../CliHandler.js';
 
 /**
  * Provider for accessing secrets stored in 1Password using the 1Password CLI (op).
@@ -14,14 +14,12 @@ import { SecretProvider } from '../SecretProvider.js';
  * @see {@link https://developer.1password.com/docs/cli/reference} for 1Password CLI documentation
  */
 export class OnePasswordProvider extends SecretProvider {
-    /**
-     * Cached session token for reuse across multiple secret retrievals.
-     * @private
-     */
     private sessionToken: string | null = null;
+    private cli: CliHandler;
 
     constructor() {
         super();
+        this.cli = new CliHandler();
         // Use service account token if available
         if (process.env.OP_SERVICE_ACCOUNT_TOKEN) {
             this.sessionToken = process.env.OP_SERVICE_ACCOUNT_TOKEN;
@@ -55,11 +53,15 @@ export class OnePasswordProvider extends SecretProvider {
             // Only attempt interactive signin if not using service account token
             if (!process.env.OP_SERVICE_ACCOUNT_TOKEN) {
                 try {
-                    // Get the session token by signing in
-                    this.sessionToken = execSync('op signin --raw', {
-                        encoding: 'utf-8',
-                        stdio: ['inherit', 'pipe', 'pipe']
-                    }).trim();
+                    console.log('🔑 1Password needs to login. You are interacting with 1Password CLI now.');
+                    const loginResponse = await this.cli.run('op signin --raw', {
+                        interactive: true,
+                        passwordPrompt: 'Enter the password for'
+                    });
+                    if (loginResponse.state !== 'ok') {
+                        throw new Error(loginResponse.error?.message || loginResponse.message || 'Unable to run op signin');
+                    }
+                    this.sessionToken = loginResponse.stdout.trim();
 
                     // Retry with the new session token
                     return await this.getSecretValue(path, this.sessionToken);
@@ -93,12 +95,12 @@ export class OnePasswordProvider extends SecretProvider {
             ? `op read "${path}" --session="${sessionToken}"`
             : `op read "${path}"`;
 
-        const result = execSync(command, {
-            encoding: 'utf-8',
-            stdio: ['inherit', 'pipe', 'pipe']
-        });
+        const response = await this.cli.run(command);
+        if (response.state !== 'ok') {
+            throw new Error(response.error?.message || response.message || 'Unable to read secret');
+        }
 
-        const value = result.trim();
+        const value = response.stdout.trim();
         if (!value) {
             throw new Error(`No value found for secret at path '${path}'`);
         }

@@ -9,7 +9,8 @@ describe('KeePassProvider', () => {
     const testDbPath = join(__dirname, 'keepass.kdbx');
 
     beforeEach(() => {
-        provider = new KeePassProvider('password');
+        process.env.KEEPASS_PASSWORD = 'password';
+        provider = new KeePassProvider();
     });
 
     it('should throw error for invalid path format', async () => {
