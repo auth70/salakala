@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { appendFileSync } from "fs";
 
 /**
  * Represents the result of a CLI command execution
@@ -59,6 +60,12 @@ function prune(str: string) {
     return str.replaceAll(pruneMessages[0], '').replaceAll(pruneMessages[1], '');
 }
 
+function debug(str: string) {
+    console.log(str);
+    // append to debug.txt
+    appendFileSync('debug.txt', `line: ${str}\n`);
+}
+
 /**
  * Handles execution of CLI commands with advanced error handling and output control
  * @class CliHandler
@@ -103,7 +110,7 @@ export class CliHandler {
         const textEncoder = new TextEncoder();
 
         return new Promise((resolve, reject) => {
-            console.log(`✨ Running: ${censor(command)}`);
+            if(options.debug) debug(`✨ Running: ${censor(command)}`);
 
             // Spawn process with inherited TTY settings for proper color support
             const child = spawn(command, {
@@ -125,6 +132,8 @@ export class CliHandler {
             function handleStd(data: Buffer, type: 'stdout' | 'stderr') {
                 const prunedData = prune(textDecoder.decode(data));
                 let line = prunedData;
+
+                if(options.debug) debug(`🐛 Handling ${type}: ${line}`);
                 
                 // Strip control codes and newlines before comparing lines
                 const stripControlCodes = (str: string) => str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/[\r\n]/g, '');
@@ -158,25 +167,26 @@ export class CliHandler {
                     type === 'stdout' ? options.onStdout?.(line) : options.onStderr?.(line);
                     return;
                 } else {
+                    if(options.debug) debug(`🐛 Interactive mode detected`);
                     // Check for password prompt
                     if (options.passwordPrompt && line.includes(options.passwordPrompt)) {
-                        if(options.debug) console.log(`🐛 Password prompt seen in ${type}: ${options.passwordPrompt}`);
+                        if(options.debug) debug(`🐛 Password prompt seen in ${type}: ${options.passwordPrompt}`);
                         passwordPromptSeen = true;
                         lineAtPasswordPrompt = line;
                     }
                     // If we've seen a password prompt and this is a new line (likely user input)
                     if (passwordPromptSeen && !userInputSeen && line !== lineAtPasswordPrompt) {
                         userInputSeen = true;
-                        if(options.debug) console.log(`🐛 User input seen in ${type}: ${line}`);
+                        if(options.debug) debug(`🐛 User input seen in ${type}: ${line}`);
                     }
                     // Censor output after password prompt and user input
                     if (passwordPromptSeen && userInputSeen && !line.includes(options.passwordPrompt || '')) {
-                        if(options.debug) console.log(`🐛 Censoring output after password prompt and user input`);
+                        if(options.debug) debug(`🐛 Censoring output after password prompt and user input`);
                         line = '\n';
                     }
                     process[type].write(textEncoder.encode(line));
                     if(!passwordPromptSeen && !userInputSeen) {
-                        if(options.debug) console.log(`🐛 Adding to ${type}: ${line}`);
+                        if(options.debug) debug(`🐛 Adding to ${type}: ${line}`);
                         type === 'stdout' ? stdout += line : stderr += line;
                         type === 'stdout' ? options.onStdout?.(line) : options.onStderr?.(line);
                     } else {
@@ -189,16 +199,16 @@ export class CliHandler {
             }
 
             child.stdout?.on('data', (data) => {
+                if(options.debug) debug(`🐛 stdout: ${data}`);
                 handleStd(data, 'stdout');
             });
 
             child.stderr?.on('data', (data) => {
+                if(options.debug) debug(`🐛 stderr: ${data}`);
                 handleStd(data, 'stderr');
             });
 
-            if (options.debug) {
-                console.log(`Waiting for command to finish...`);
-            }
+            if (options.debug) debug(`Waiting for command to finish...`);
 
             child.on('error', (error) => {
                 if (options.debug) {
@@ -209,9 +219,9 @@ export class CliHandler {
 
             child.on('close', (code) => {
                 if (options.debug) {
-                    console.log(`[spawn:close] Command finished with code ${code}`);
-                    console.log(`[spawn:close] stdout: ${stdout}`);
-                    console.log(`[spawn:close] stderr: ${stderr}`);
+                    debug(`[spawn:close] Command finished with code ${code}`);
+                    debug(`[spawn:close] stdout: ${stdout}`);
+                    debug(`[spawn:close] stderr: ${stderr}`);
                 }
                 
                 // Handle different exit scenarios
