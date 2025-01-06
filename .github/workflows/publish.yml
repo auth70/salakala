@@ -1,0 +1,56 @@
+name: Publish to NPM
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2  # Needed to check for version changes
+    
+    - name: Check if version has changed
+      id: check
+      run: |
+        CURRENT_VERSION=$(node -p "require('./package.json').version")
+        git checkout HEAD^1
+        PREVIOUS_VERSION=$(node -p "require('./package.json').version")
+        git checkout -
+        if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
+          echo "Version changed from $PREVIOUS_VERSION to $CURRENT_VERSION"
+          echo "version_changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "Version unchanged"
+          echo "version_changed=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Use Node.js 20.x
+      if: steps.check.outputs.version_changed == 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      if: steps.check.outputs.version_changed == 'true'
+      run: npm ci
+    
+    - name: Build
+      if: steps.check.outputs.version_changed == 'true'
+      run: npm run build
+    
+    - name: Publish to NPM
+      if: steps.check.outputs.version_changed == 'true'
+      run: npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Import test job from test.yml
+  test:
+    uses: ./.github/workflows/test.yml 
