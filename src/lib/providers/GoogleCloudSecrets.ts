@@ -35,50 +35,65 @@ export class GoogleCloudSecretsProvider implements SecretProvider {
      * Retrieves a secret value from Google Cloud Secret Manager.
      * 
      * @param {string} path - The Google Cloud secret reference path
-     *                        Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION_NUMBER
-     *                        Example: gcsm://projects/my-project/secrets/api-key/versions/latest
+     *                        Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[:key]
+     *                        Example: gcsm://projects/my-project/secrets/api-key/versions/latest:api-key
      * @returns {Promise<string>} The secret value
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved.
      *                 Provides detailed authentication instructions if authentication fails.
      */
     async getSecret(path: string): Promise<string> {
-        // Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION_NUMBER
-        if (!path.startsWith('gcsm://')) {
+        // Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[:key]
+        const match = path.match(/^gcsm:\/\/projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/([^:]+)(?::(.+))?$/);
+        if (!match) {
             throw new Error('Invalid Google Cloud secret path');
         }
-        
-        // Convert the URL-style path to GCP resource path format
-        const gcpPath = path.replace('gcsm://', '');
+
+        const [, projectId, secretId, version, key] = match;
+        const secretPath = `projects/${projectId}/secrets/${secretId}/versions/${version}`;
+
         try {
             // Access the specified version of the secret
-            const [version] = await this.client.accessSecretVersion({
-                name: gcpPath,
+            const [response] = await this.client.accessSecretVersion({
+                name: secretPath,
             });
             
-            if (!version.payload?.data) {
+            if (!response.payload?.data) {
                 throw new Error('Secret payload is empty');
             }
 
-            // If the data is already a string, return it directly
-            if (typeof version.payload.data === 'string') {
-                return version.payload.data.trim();
-            }
-            
-            // For Buffer data, try to convert to string first
-            try {
-                const stringData = Buffer.from(version.payload.data).toString('utf8');
-                // Check if it's a valid UTF-8 string by re-encoding
-                if (Buffer.from(stringData, 'utf8').toString('utf8') === stringData) {
-                    return stringData.trim();
+            // Convert to string if it's a Buffer
+            const value = typeof response.payload.data === 'string' 
+                ? response.payload.data 
+                : Buffer.from(response.payload.data).toString();
+
+            // If a key is specified, treat as JSON and get that key
+            if (key) {
+                try {
+                    const parsed = JSON.parse(value);
+                    if (!(key in parsed)) {
+                        throw new Error(`Key '${key}' not found in secret`);
+                    }
+                    return String(parsed[key]);
+                } catch (e) {
+                    if (e instanceof Error && e.message.includes('Key')) {
+                        throw e;
+                    }
+                    throw new Error('Secret is not a valid JSON object but a key was requested');
                 }
-            } catch {
-                // If string conversion fails, fall through to base64
             }
-            
-            // Fall back to base64 for binary data
-            return Buffer.from(version.payload.data).toString('base64');
+
+            // No key specified, return as is
+            return value.trim();
+
         } catch (error: unknown) {
             if (error instanceof Error) {
+                // If it's our own error, throw it directly
+                if (error.message.includes('Key') || 
+                    error.message.includes('JSON') || 
+                    error.message.includes('empty')) {
+                    throw error;
+                }
+
                 const errorMessage = error.message.toLowerCase();
                 // Provide helpful authentication instructions for auth-related errors
                 if (errorMessage.includes('permission denied') || 

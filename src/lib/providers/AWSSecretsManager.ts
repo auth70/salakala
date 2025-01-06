@@ -54,61 +54,69 @@ export class AWSSecretsManagerProvider implements SecretProvider {
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved
      */
     async getSecret(path: string): Promise<string> {
-        // Format: awssm://region/secret-name
-        const match = path.match(/^awssm:\/\/([^\/]+)\/(.+)$/);
+        // Format: awssm://region/secret-name[:key]
+        const match = path.match(/^awssm:\/\/([^\/]+)\/([^:]+)(?::(.+))?$/);
         if (!match) {
-            throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name');
+            throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name[:key]');
         }
 
-        const [, region, secretId] = match;
+        const [, region, secretId, key] = match;
         const client = this.getClient(region);
 
         try {
             // Retrieve the secret value from AWS Secrets Manager
             const response = await client.getSecretValue({ SecretId: secretId });
             
-            if (response.SecretString) {
+            if (!response.SecretString && !response.SecretBinary) {
+                throw new Error('Secret value is empty');
+            }
+
+            const secretValue = response.SecretString || 
+                Buffer.from(response.SecretBinary!).toString();
+
+            // If a key is specified, parse as JSON and get that key
+            if (key) {
                 try {
-                    // Attempt to parse as JSON
-                    JSON.parse(response.SecretString);
-                    // If successful, return the raw string for JSON handling
-                    return response.SecretString;
-                } catch {
-                    // If not JSON, return as is
-                    return response.SecretString;
+                    const parsed = JSON.parse(secretValue);
+                    if (typeof parsed !== 'object' || parsed === null) {
+                        throw new Error('Secret is not a valid JSON object but a key was requested');
+                    }
+                    if (!(key in parsed)) {
+                        throw new Error(`Key '${key}' not found in secret`);
+                    }
+                    return String(parsed[key]);
+                } catch (e) {
+                    if (e instanceof Error && e.message.includes('Key')) {
+                        throw e;
+                    }
+                    throw new Error('Secret is not a valid JSON object but a key was requested');
                 }
             }
-            
-            if (response.SecretBinary) {
-                // Convert binary data to string and try parsing as JSON first
-                const stringData = Buffer.from(response.SecretBinary).toString();
-                try {
-                    // Attempt to parse as JSON
-                    JSON.parse(stringData);
-                    // If successful, return the string for JSON handling
-                    return stringData;
-                } catch {
-                    // If not JSON, fall back to base64 encoding
-                    return Buffer.from(response.SecretBinary).toString('base64');
-                }
-            }
-            
-            throw new Error('Secret value is empty');
+
+            // If no key specified, return the raw value
+            return secretValue;
         } catch (error: unknown) {
             if (error instanceof Error) {
+                // If it's our own error, throw it directly
+                if (error.message.includes('Key') || 
+                    error.message.includes('JSON') || 
+                    error.message.includes('empty')) {
+                    throw error;
+                }
+
+                // For authentication issues, try to reauthenticate
                 const errorMessage = error.message.toLowerCase();
-                // Check for common authentication/credentials errors
                 if (errorMessage.includes('credentials') || 
                     errorMessage.includes('authentication') || 
-                    errorMessage.includes('access denied') ||
-                    errorMessage.includes('not authorized')) {
+                    errorMessage.includes('access denied')) {
                     
-                    // Ask if they want to configure AWS credentials
                     const response = await this.promptForAuthentication();
                     if (response) {
-                        throw new Error('Please try accessing the secret again after AWS configuration is complete.');
+                        this.clients.delete(region);
+                        return this.getSecret(path);
                     }
                 }
+
                 throw new Error(`Failed to read AWS secret: ${error.message}`);
             }
             throw new Error('Failed to read AWS secret: Unknown error');

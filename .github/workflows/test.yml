@@ -30,6 +30,13 @@ jobs:
     - name: Setup Google Cloud credentials
       run: |
         echo '${{ secrets.GOOGLE_TEST_SERVICE_KEY }}' > /tmp/google-credentials.json
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
       
     - name: Install dependencies
       run: npm ci
@@ -41,4 +48,5 @@ jobs:
       env:
         GOOGLE_APPLICATION_CREDENTIALS: /tmp/google-credentials.json
         GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
+        AWS_REGION: us-east-1
       run: npm test 

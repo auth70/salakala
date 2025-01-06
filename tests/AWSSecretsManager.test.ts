@@ -1,137 +1,58 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { AWSSecretsManagerProvider } from '../src/lib/providers/AWSSecretsManager.js';
-import { GetSecretValueCommandOutput } from '@aws-sdk/client-secrets-manager';
-
-const mockGetSecretValue = vi.fn();
-
-vi.mock('@aws-sdk/client-secrets-manager', () => ({
-    SecretsManager: class {
-        constructor(config: { region: string }) {
-            return {
-                getSecretValue: mockGetSecretValue
-            };
-        }
-    }
-}));
 
 describe('AWSSecretsManagerProvider', () => {
+    let provider: AWSSecretsManagerProvider;
+    let region: string;
+
     beforeEach(() => {
-        mockGetSecretValue.mockReset();
+        region = process.env.AWS_REGION || 'us-east-1';
+        provider = new AWSSecretsManagerProvider();
     });
 
-    it('should retrieve secret with region', async () => {
-        const provider = new AWSSecretsManagerProvider();
-        const mockResponse: Partial<GetSecretValueCommandOutput> = {
-            SecretString: 'test-secret'
-        };
-        mockGetSecretValue.mockResolvedValue(mockResponse);
-
-        const secret = await provider.getSecret('awssm://us-west-2/test/secret/path');
-        expect(secret).toBe('test-secret');
-        expect(mockGetSecretValue).toHaveBeenCalledWith({ SecretId: 'test/secret/path' });
-    });
-
-    it('should handle binary secrets by base64 encoding them', async () => {
-        const provider = new AWSSecretsManagerProvider();
-        const binaryData = Buffer.from('test-binary-secret');
-        const mockResponse: Partial<GetSecretValueCommandOutput> = {
-            SecretBinary: binaryData
-        };
-        mockGetSecretValue.mockResolvedValue(mockResponse);
-
-        const secret = await provider.getSecret('awssm://us-west-2/test/secret/path');
-        expect(secret).toBe(binaryData.toString('base64'));
-        expect(mockGetSecretValue).toHaveBeenCalledWith({ SecretId: 'test/secret/path' });
-    });
-
-    it('should throw on invalid URI format', async () => {
-        const provider = new AWSSecretsManagerProvider();
-        await expect(provider.getSecret('awssm://invalid-path'))
+    it('should throw error for invalid path format', async () => {
+        await expect(provider.getSecret('invalid-path'))
             .rejects
-            .toThrow('Invalid AWS secret path format. Expected: awssm://region/secret-name');
+            .toThrow('Invalid AWS secret path format');
     });
 
-    it('should reuse client for same region', async () => {
-        const provider = new AWSSecretsManagerProvider();
-        const mockResponse: Partial<GetSecretValueCommandOutput> = {
-            SecretString: 'test-secret'
-        };
-        mockGetSecretValue.mockResolvedValue(mockResponse);
-
-        await provider.getSecret('awssm://us-west-2/secret1');
-        await provider.getSecret('awssm://us-west-2/secret2');
-        
-        expect(mockGetSecretValue).toHaveBeenCalledTimes(2);
-    });
-
-    it('should throw when secret is empty', async () => {
-        const provider = new AWSSecretsManagerProvider();
-        const mockResponse: Partial<GetSecretValueCommandOutput> = {};
-        mockGetSecretValue.mockResolvedValue(mockResponse);
-
-        await expect(provider.getSecret('awssm://us-east-1/test/secret/path'))
-            .rejects
-            .toThrow('Secret value is empty');
-    });
-
-    it('should propagate AWS errors', async () => {
-        const provider = new AWSSecretsManagerProvider();
-        const error = new Error('AWS Error');
-        mockGetSecretValue.mockRejectedValue(error);
-
-        await expect(provider.getSecret('awssm://us-east-1/test/secret/path'))
-            .rejects
-            .toThrow('Failed to read AWS secret: AWS Error');
-    });
-
-    it('should handle JSON string secret', async () => {
-        const provider = new AWSSecretsManagerProvider();
-        const jsonData = JSON.stringify({ key: 'value', nested: { data: true } });
-        const mockResponse = { SecretString: jsonData };
-        
-        const mockClient = {
-            getSecretValue: vi.fn().mockResolvedValue(mockResponse)
-        };
-        provider['clients'].set('us-east-1', mockClient as any);
-
-        const secret = await provider.getSecret('awssm://us-east-1/test/secret');
-        expect(secret).toBe(jsonData);
-        // Verify it's valid JSON
+    it('should retrieve entire secret as JSON when no key specified', async () => {
+        const secret = await provider.getSecret(`awssm://${region}/test/test-secret`);
+        expect(typeof secret).toBe('string');
         expect(() => JSON.parse(secret)).not.toThrow();
-        expect(JSON.parse(secret)).toEqual({ key: 'value', nested: { data: true } });
+        const parsed = JSON.parse(secret);
+        expect(parsed).toBeTypeOf('object');
+        expect(parsed['secret-key']).toBe('secret-value');
     });
 
-    it('should handle JSON in binary format', async () => {
-        const provider = new AWSSecretsManagerProvider();
-        const jsonData = JSON.stringify({ key: 'value', numbers: [1, 2, 3] });
-        const binaryData = Buffer.from(jsonData);
-        const mockResponse = { SecretBinary: binaryData };
-        
-        const mockClient = {
-            getSecretValue: vi.fn().mockResolvedValue(mockResponse)
-        };
-        provider['clients'].set('us-east-1', mockClient as any);
-
-        const secret = await provider.getSecret('awssm://us-east-1/test/secret');
-        expect(secret).toBe(jsonData);
-        // Verify it's valid JSON
-        expect(() => JSON.parse(secret)).not.toThrow();
-        expect(JSON.parse(secret)).toEqual({ key: 'value', numbers: [1, 2, 3] });
+    it('should retrieve plaintext secret when no key specified', async () => {
+        const secret = await provider.getSecret(`awssm://${region}/test/test-plain-secret`);
+        expect(typeof secret).toBe('string');
+        expect(secret).toBe('12345');
     });
 
-    it('should handle non-JSON binary as base64', async () => {
-        const provider = new AWSSecretsManagerProvider();
-        const binaryData = Buffer.from('not-json-data');
-        const mockResponse = { SecretBinary: binaryData };
-        
-        const mockClient = {
-            getSecretValue: vi.fn().mockResolvedValue(mockResponse)
-        };
-        provider['clients'].set('us-east-1', mockClient as any);
+    it('should retrieve specific key from secret', async () => {
+        const secret = await provider.getSecret(`awssm://${region}/test/test-secret:secret-key`);
+        expect(typeof secret).toBe('string');
+        expect(secret.length).toBeGreaterThan(0);
+        expect(secret).toBe('secret-value');
+    });
 
-        const secret = await provider.getSecret('awssm://us-east-1/test/secret');
-        expect(secret).toBe(binaryData.toString('base64'));
-        // Verify it's not JSON
-        expect(() => JSON.parse(secret)).toThrow();
+    it('should throw on invalid path', async () => {
+        await expect(provider.getSecret(`awssm://${region}/non-existent-secret`))
+            .rejects
+            .toThrow(/Failed to read AWS secret/);
+    });
+
+    it('should throw on invalid key in key-value secret', async () => {
+        await expect(provider.getSecret(`awssm://${region}/test/test-secret:non-existent-key`))
+            .rejects
+            .toThrow(/Key 'non-existent-key' not found in secret/);
+    });
+
+    it('should handle non-JSON secret with key specified', async () => {
+        await expect(provider.getSecret(`awssm://${region}/test/test-plain-secret:some-key`))
+            .rejects
+            .toThrow('Secret is not a valid JSON object but a key was requested');
     });
 });

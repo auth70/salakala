@@ -157,22 +157,20 @@ export class SecretsManager {
             secretsByProvider.get(prefix)!.set(envVar, resolvedPath);
         }
 
-        // Process each provider's secrets in parallel
-        await Promise.all(Array.from(secretsByProvider.entries()).map(async ([prefix, secretGroup]) => {
+        // Process all providers sequentially
+        for (const [prefix, secretGroup] of secretsByProvider) {
             const provider = this.providers.get(prefix)!;
-            
-            // Process secrets sequentially within each provider group
             for (const [envVar, secretPath] of secretGroup.entries()) {
                 try {
-                    console.info(`Loading secret for ${envVar}: ${secretPath}`);
+                    console.info(`Getting value for ${envVar} from ${secretPath}`);
                     const secretValue = await provider.getSecret(secretPath);
                     secrets[envVar] = secretValue;
                 } catch (error: unknown) {
                     const err = error instanceof Error ? error.message : String(error);
-                    errors.push(new Error(`Failed to load secret for ${envVar} using ${secretPath}:\n- ${err}`));
+                    errors.push(new Error(`Failed to get value for ${envVar} using ${secretPath}:\n- ${err}`));
                 }
             }
-        }));
+        }
 
         // If any errors occurred, throw them all together
         if (errors.length > 0) {
