@@ -11,6 +11,8 @@ on:
         required: true
       GOOGLE_CLOUD_PROJECT:
         required: true
+      OP_SERVICE_ACCOUNT_TOKEN:
+        required: true
   push:
     branches: [ main ]
   pull_request:

@@ -5,8 +5,10 @@ import { SecretProvider } from '../SecretProvider.js';
  * Provider for accessing secrets stored in 1Password using the 1Password CLI (op).
  * This implementation requires the 1Password CLI to be installed and configured.
  * 
- * The session token is cached after the first successful authentication
- * and reused for subsequent requests until the program terminates.
+ * Authentication is handled via:
+ * - Service account token (OP_SERVICE_ACCOUNT_TOKEN environment variable)
+ * - Session token (cached after successful authentication)
+ * - Interactive signin (if neither of the above is available)
  * 
  * @implements {SecretProvider}
  * @see {@link https://developer.1password.com/docs/cli/reference} for 1Password CLI documentation
@@ -17,6 +19,13 @@ export class OnePasswordProvider implements SecretProvider {
      * @private
      */
     private sessionToken: string | null = null;
+
+    constructor() {
+        // Use service account token if available
+        if (process.env.OP_SERVICE_ACCOUNT_TOKEN) {
+            this.sessionToken = process.env.OP_SERVICE_ACCOUNT_TOKEN;
+        }
+    }
 
     /**
      * Retrieves a secret value from 1Password using the CLI.
@@ -42,22 +51,30 @@ export class OnePasswordProvider implements SecretProvider {
             // If no session token, try without it (might work if user is already signed in)
             return await this.getSecretValue(path);
         } catch (error: unknown) {
-            // Attempt to sign in and retry once
-            try {
-                // Get the session token by signing in
-                this.sessionToken = execSync('op signin --raw', {
-                    encoding: 'utf-8',
-                    stdio: ['inherit', 'pipe', 'pipe']
-                }).trim();
+            // Only attempt interactive signin if not using service account token
+            if (!process.env.OP_SERVICE_ACCOUNT_TOKEN) {
+                try {
+                    // Get the session token by signing in
+                    this.sessionToken = execSync('op signin --raw', {
+                        encoding: 'utf-8',
+                        stdio: ['inherit', 'pipe', 'pipe']
+                    }).trim();
 
-                // Retry with the new session token
-                return await this.getSecretValue(path, this.sessionToken);
-            } catch (retryError: unknown) {
-                if (retryError instanceof Error) {
-                    throw new Error(`Failed to read 1Password secret: ${retryError.message}`);
+                    // Retry with the new session token
+                    return await this.getSecretValue(path, this.sessionToken);
+                } catch (retryError: unknown) {
+                    if (retryError instanceof Error) {
+                        throw new Error(`Failed to read 1Password secret: ${retryError.message}`);
+                    }
+                    throw new Error('Failed to read 1Password secret: Unknown error');
                 }
-                throw new Error('Failed to read 1Password secret: Unknown error');
             }
+            
+            // If using service account token, or other error, throw directly
+            if (error instanceof Error) {
+                throw new Error(`Failed to read 1Password secret: ${error.message}`);
+            }
+            throw new Error('Failed to read 1Password secret: Unknown error');
         }
     }
 
