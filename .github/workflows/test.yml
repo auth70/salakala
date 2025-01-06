@@ -2,6 +2,15 @@ name: Tests
 
 on:
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      GOOGLE_TEST_SERVICE_KEY:
+        required: true
+      GOOGLE_CLOUD_PROJECT:
+        required: true
   push:
     branches: [ main ]
   pull_request:
