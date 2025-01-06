@@ -3,7 +3,7 @@
     "bin": {
         "salakala": "./dist/cli.js"
     },
-    "version": "0.3.1",
+    "version": "0.3.2",
     "description": "Generate .env files from various secret providers",
     "type": "module",
     "scripts": {

@@ -5,3 +5,4 @@ salakala.json
 test-env.cjs
 dist/
 node_modules/
+run-tests.sh

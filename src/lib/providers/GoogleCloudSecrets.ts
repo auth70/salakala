@@ -59,30 +59,24 @@ export class GoogleCloudSecretsProvider implements SecretProvider {
                 throw new Error('Secret payload is empty');
             }
 
-            // If the data is already a string, try parsing as JSON first
+            // If the data is already a string, return it directly
             if (typeof version.payload.data === 'string') {
-                try {
-                    // Attempt to parse as JSON
-                    JSON.parse(version.payload.data);
-                    // If successful, return the raw string for JSON handling
-                    return version.payload.data.trim();
-                } catch {
-                    // If not JSON, return as is
-                    return version.payload.data.trim();
-                }
+                return version.payload.data.trim();
             }
             
-            // For Buffer data, convert to string and try parsing as JSON
-            const stringData = Buffer.from(version.payload.data).toString();
+            // For Buffer data, try to convert to string first
             try {
-                // Attempt to parse as JSON
-                JSON.parse(stringData);
-                // If successful, return the string for JSON handling
-                return stringData;
+                const stringData = Buffer.from(version.payload.data).toString('utf8');
+                // Check if it's a valid UTF-8 string by re-encoding
+                if (Buffer.from(stringData, 'utf8').toString('utf8') === stringData) {
+                    return stringData.trim();
+                }
             } catch {
-                // If not JSON, fall back to base64 encoding
-                return Buffer.from(version.payload.data).toString('base64');
+                // If string conversion fails, fall through to base64
             }
+            
+            // Fall back to base64 for binary data
+            return Buffer.from(version.payload.data).toString('base64');
         } catch (error: unknown) {
             if (error instanceof Error) {
                 const errorMessage = error.message.toLowerCase();
