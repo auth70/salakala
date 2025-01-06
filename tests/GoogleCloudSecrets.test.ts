@@ -24,7 +24,6 @@ describe('GoogleCloudSecretsProvider', () => {
         const secret = await provider.getSecret(`gcsm://projects/${projectId}/secrets/test-secret/versions/latest`);
         expect(typeof secret).toBe('string');
         expect(secret.length).toBeGreaterThan(0);
-        console.log(secret);
         expect(secret).toBe('secret-value');
     });
 
