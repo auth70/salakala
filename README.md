@@ -144,137 +144,259 @@ salakala will try to automatically detect if a secret is binary with providers t
 
 ## Supported Providers
 
-### 1Password (`op://`)
+<details>
+<summary><b>1Password <code>(op://)</code></b></summary>
 
 Uses the 1Password CLI to fetch secrets.
 
-- Format: `op://vault-name/item-name/[section-name/]field-name`
-- Example: `op://Personal/AWS/access-key`
-- Requirements: 
-  - 1Password CLI (`op`) installed
-  - Logged in to 1Password CLI
+**Format:**
 
-### LastPass (`lp://`)
+```
+op://vault-name/item-name/[section-name/]field-name
+```
+
+**Example:**
+```
+op://Personal/AWS/access-key
+```
+
+**Requirements:**
+
+- 1Password CLI (`op`) installed
+- Logged in to 1Password CLI
+
+</details>
+
+<details>
+<summary><b>LastPass <code>(lp://)</code></b></summary>
 
 Uses the LastPass CLI to fetch secrets.
 
-- Format: `lp://group/item-name[/field]`
-- Example: `lp://Personal/AWS/api-key`
-- Default field: `password`
-- Supported fields: `password`, `username`, `url`, `notes`, or any custom field
-- Requirements:
+**Format:**
+```
+lp://group/item-name[/field]
+```
+
+**Example:**
+```
+lp://Personal/AWS/api-key
+```
+
+**Requirements:**
   - LastPass CLI (`lpass`) installed
   - Logged in to LastPass CLI
+</details>
 
-### Bitwarden (`bw://`)
+<details>
+<summary><b>Bitwarden <code>(bw://)</code></b></summary>
 
 Uses the Bitwarden CLI to fetch secrets.
 
-- Format: `bw://item-id/field`
-- Example: `bw://9c9448b3-3d30-4e01-8d3c-3a4b8d14d00a/password`
-- Requirements:
+**Format:**
+```
+bw://item-id/field
+```
+
+**Example:**
+```
+bw://9c9448b3-3d30-4e01-8d3c-3a4b8d14d00a/password
+```
+
+**Requirements:**
   - Bitwarden CLI (`bw`) installed
   - Logged in to Bitwarden CLI
+</details>
 
-### AWS Secrets Manager (`awssm://`)
+<details>
+<summary><b>AWS Secrets Manager <code>(awssm://)</code></b></summary>
 
 Fetches secrets from AWS Secrets Manager.
 
-- Format: `awssm://region/secret-name[:key]`
-- Examples:
-  - Plaintext secret: `awssm://us-east-1/prod/api-key` (returns the raw value)
-  - JSON object: `awssm://us-east-1/prod/database` (returns the entire JSON object)
-  - Specific key: `awssm://us-east-1/prod/database:password` (returns the value of the password key)
-- Requirements:
+**Format:**
+```
+awssm://region/secret-name[:key]
+```
+
+**Example: Plaintext secret:**
+```
+awssm://us-east-1/prod/api-key
+```
+
+**Example: JSON object:**
+```
+awssm://us-east-1/prod/database
+```
+
+**Example: Specific key in JSON object:**
+```
+awssm://us-east-1/prod/database:password
+```
+
+**Requirements:**
   - AWS credentials configured (environment variables, credentials file, or IAM role)
   - Appropriate IAM permissions for `secretsmanager:GetSecretValue`
-- Supported secret types:
-  - Plaintext values (returned as-is)
-  - JSON objects (returned as JSON string or specific key value)
 
-### Google Cloud Secret Manager (`gcsm://`)
+</details>
+
+<details>
+<summary><b>Google Cloud Secret Manager <code>(gcsm://)</code></b></summary>
 
 Fetches secrets from Google Cloud Secret Manager.
 
-- Format: `gcsm://projects/project-id/secrets/secret-id/versions/version[:key]`
-- Examples:
-  - Plaintext secret: `gcsm://projects/my-project/secrets/api-key/versions/latest` (returns the raw value)
-  - JSON object: `gcsm://projects/my-project/secrets/database/versions/latest` (returns the entire JSON object)
-  - Specific key: `gcsm://projects/my-project/secrets/database/versions/latest:password` (returns the value of the password key)
-- Requirements:
+**Format:**
+```
+gcsm://projects/project-id/secrets/secret-id/versions/version[:key]
+```
+
+**Example: Plaintext secret:**
+```
+gcsm://projects/my-project/secrets/api-key/versions/latest
+```
+
+**Example: JSON object:**
+```
+gcsm://projects/my-project/secrets/database/versions/latest
+```
+
+**Example: Specific key in JSON object:**
+```
+gcsm://projects/my-project/secrets/database/versions/latest:password
+```
+
+**Requirements:**
   - Google Cloud credentials configured (service account key file via GOOGLE_APPLICATION_CREDENTIALS or gcloud CLI login)
   - Appropriate IAM permissions for `secretmanager.versions.access`
-- Supported secret types:
-  - Plaintext values (returned as-is)
-  - JSON objects (returned as JSON string or specific key value)
-- Version formats:
-  - Numeric: `versions/1`, `versions/2`, etc.
-  - Latest: `versions/latest`
+</details>
 
-### Azure Key Vault (`azurekv://`)
+<details>
+<summary><b>Azure Key Vault <code>(azurekv://)</code></b></summary>
 
 Fetches secrets from Azure Key Vault.
 
-- Format: `azurekv://vault-name.vault.azure.net/secret-name`
-- Example: `azurekv://my-vault.vault.azure.net/database-password`
-- Requirements:
+**Format:**
+```
+azurekv://vault-name.vault.azure.net/secret-name
+```
+
+**Example:**
+```
+azurekv://my-vault.vault.azure.net/database-password
+```
+
+**Requirements:**
   - Azure credentials configured (uses DefaultAzureCredential)
   - Appropriate access policies
+</details>
 
-### HashiCorp Vault (`hcv://`)
+<details>
+<summary><b>HashiCorp Vault <code>(hcv://)</code></b></summary>
 
 Fetches secrets from HashiCorp Vault.
 
-- Format: `hcv://vault-address/secret/path`
-- Example: `hcv://vault.example.com:8200/secret/data/database/credentials`
-- Supports both KV v1 and v2 secret engines
-- Requirements:
+**Format:**
+```
+hcv://vault-address/secret/path
+```
+
+**Example:**
+```
+hcv://vault.example.com:8200/secret/data/database/credentials
+```
+
+**Requirements:**
   - Vault server accessible
   - `VAULT_ADDR` and `VAULT_TOKEN` environment variables set
 
-### GitHub Secrets (`ghs://`)
+**Notes:**
+- Supports both KV v1 and v2 secret engines
+
+</details>
+
+<details>
+<summary><b>GitHub Secrets <code>(ghs://)</code></b></summary>
 
 Uses the GitHub CLI to fetch repository secrets.
 
-- Format: `ghs://owner/repo/secret-name`
-- Example: `ghs://auth70/salakala/API_KEY`
-- Requirements:
+**Format:**
+```
+ghs://owner/repo/secret-name
+```
+
+**Example:**
+```
+ghs://auth70/salakala/API_KEY
+```
+
+**Requirements:**
   - GitHub CLI (`gh`) installed
   - Logged in to GitHub CLI
   - Appropriate repository access permissions
+</details>
 
-### Doppler (`doppler://`)
+<details>
+<summary><b>Doppler <code>(doppler://)</code></b></summary>
 
 Uses the Doppler CLI to fetch secrets.
 
-- Format: `doppler://project/config/secret-name`
-- Example: `doppler://my-project/dev/DATABASE_URL`
-- Requirements:
+**Format:**
+```
+doppler://project/config/secret-name
+```
+
+**Example:**
+```
+doppler://my-project/dev/DATABASE_URL
+```
+
+**Requirements:**
   - Doppler CLI installed
   - Logged in to Doppler CLI (`doppler login`)
+</details>
 
-### Infisical (`inf://`)
+<details>
+<summary><b>Infisical <code>(inf://)</code></b></summary>
 
 Uses the Infisical CLI to fetch secrets.
 
-- Format: `inf://workspace/environment/secret-name`
-- Example: `inf://my-project/dev/DATABASE_URL`
-- Requirements:
+**Format:**
+```
+inf://workspace/environment/secret-name
+```
+
+**Example:**
+```
+inf://my-project/dev/DATABASE_URL
+```
+
+**Requirements:**
   - Infisical CLI installed
   - Logged in to Infisical CLI (`infisical login`)
+</details>
 
-### KeePass/KeePassXC (`kp://`)
+<details>
+<summary><b>KeePassXC <code>(kp://)</code></b></summary>
 
 Uses the KeePassXC CLI to fetch secrets from a KeePass database.
 
-- Format: `kp://path/to/database.kdbx/entry-path/field`
-- Example: `kp:///Users/me/secrets.kdbx/Web/GitHub/Password`
-- Supported fields: `Password`, `UserName`, `URL`, `Notes`, or any custom field
-- To find field titles, you can use the `keepassxc-cli` command: `keepassxc-cli show "/path/to/database.kdbx" "entry-name"`
-- Requirements:
+**Format:**
+```
+kp://path/to/database.kdbx/entry-path/field
+```
+
+**Example:**
+```
+kp:///Users/me/secrets.kdbx/Web/GitHub/Password
+```
+
+**Requirements:**
   - KeePassXC CLI (`keepassxc-cli`) installed
   - Valid KeePass database file (.kdbx)
   - Database password will be prompted when accessing secrets
+
+**Notes:**
+- To find field titles, you can use the `keepassxc-cli` command: `keepassxc-cli show "/path/to/database.kdbx" "entry-name"`
+
+</details>
 
 ## Recommendations
 
