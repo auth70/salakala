@@ -54,6 +54,10 @@ jobs:
       with:
         service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 
+    - name: Install bw
+      run: |
+        curl -s https://get.bitwarden.com | bash
+
     - name: Install op
       run: |
         curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
