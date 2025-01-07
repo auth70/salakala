@@ -57,6 +57,7 @@ export class OnePasswordProvider extends SecretProvider {
                     const loginResponse = await this.cli.run('op signin --raw', {
                         interactive: true,
                         passwordPrompt: 'Enter the password for',
+                        suppressStdout: true,
                     });
                     if (loginResponse.state !== 'ok') {
                         throw new Error(loginResponse.error?.message || loginResponse.message || 'Unable to run op signin');

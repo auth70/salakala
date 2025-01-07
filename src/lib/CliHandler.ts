@@ -60,10 +60,10 @@ function prune(str: string) {
     return str.replaceAll(pruneMessages[0], '').replaceAll(pruneMessages[1], '');
 }
 
-function debug(str: string) {
-    console.log(str);
-    // append to debug.txt
-    appendFileSync('debug.txt', `line: ${str}\n`);
+function debug(opts: any, str: string) {
+    if(opts.debug) {
+        appendFileSync('debug.txt', `${str}\n`);
+    }
 }
 
 /**
@@ -86,6 +86,7 @@ export class CliHandler {
      * @param options.debug - Enable debug logging
      * @param options.passwordPrompt - String pattern indicating a password prompt, after which output should be censored
      * @param options.password - Password to input when passwordPrompt is detected (for non-interactive mode)
+     * @param options.suppressStdout - Suppress stdout output (used for tty-controlling commands)
      * @returns Promise<CliResponse> - Resolution of command execution
      */
     run(command: string, options: {
@@ -100,17 +101,24 @@ export class CliHandler {
         debug?: boolean;
         passwordPrompt?: string;
         password?: string;
+        suppressStdout?: boolean;
     } = {}): Promise<CliResponse> {
 
+        // Cache error value to pass to CliResponse
         let errorValue: Error | null = null;
-        let passwordPromptSeen = false;
-        let userInputSeen = false;
-        let passwordSent = false;
+
+        // Password prompt has been output by the CLI, so we can censor output after it
+        let passwordPromptSeen = false; 
+        // User has interacted with the CLI (e.g. typed a password)
+        let userInputSeen = false; 
+        // Password has been sent to the CLI in non-interactive mode
+        let passwordSent = false; 
+
         const textDecoder = new TextDecoder();
         const textEncoder = new TextEncoder();
 
         return new Promise((resolve, reject) => {
-            if(options.debug) debug(`✨ Running: ${censor(command)}`);
+            console.log(`✨ Running: ${censor(command)}`);
 
             // Spawn process with inherited TTY settings for proper color support
             const child = spawn(command, {
@@ -133,7 +141,7 @@ export class CliHandler {
                 const prunedData = prune(textDecoder.decode(data));
                 let line = prunedData;
 
-                if(options.debug) debug(`🐛 Handling ${type}: ${line}`);
+                debug(options, `🐛 Handling ${type}: ${line}`);
                 
                 // Strip control codes and newlines before comparing lines
                 const stripControlCodes = (str: string) => str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/[\r\n]/g, '');
@@ -167,26 +175,32 @@ export class CliHandler {
                     type === 'stdout' ? options.onStdout?.(line) : options.onStderr?.(line);
                     return;
                 } else {
-                    if(options.debug) debug(`🐛 Interactive mode detected`);
+                    debug(options, `🐛 Interactive mode detected`);
                     // Check for password prompt
                     if (options.passwordPrompt && line.includes(options.passwordPrompt)) {
-                        if(options.debug) debug(`🐛 Password prompt seen in ${type}: ${options.passwordPrompt}`);
+                        debug(options, `🐛 Password prompt seen in ${type}: ${options.passwordPrompt}`);
                         passwordPromptSeen = true;
                         lineAtPasswordPrompt = line;
                     }
                     // If we've seen a password prompt and this is a new line (likely user input)
                     if (passwordPromptSeen && !userInputSeen && line !== lineAtPasswordPrompt) {
                         userInputSeen = true;
-                        if(options.debug) debug(`🐛 User input seen in ${type}: ${line}`);
+                        debug(options, `🐛 User input seen in ${type}: ${line}`);
                     }
                     // Censor output after password prompt and user input
                     if (passwordPromptSeen && userInputSeen && !line.includes(options.passwordPrompt || '')) {
-                        if(options.debug) debug(`🐛 Censoring output after password prompt and user input`);
+                        debug(options, `🐛 Censoring output after password prompt and user input`);
                         line = '\n';
                     }
-                    process[type].write(textEncoder.encode(line));
+
+                    if(options.suppressStdout) {
+                        debug(options, `🐛 Suppressing stdout: ${line}`);
+                    } else {
+                        process[type].write(textEncoder.encode(line));
+                    }
+
                     if(!passwordPromptSeen && !userInputSeen) {
-                        if(options.debug) debug(`🐛 Adding to ${type}: ${line}`);
+                        debug(options, `🐛 Adding to ${type}: ${line}`);
                         type === 'stdout' ? stdout += line : stderr += line;
                         type === 'stdout' ? options.onStdout?.(line) : options.onStderr?.(line);
                     } else {
@@ -199,16 +213,16 @@ export class CliHandler {
             }
 
             child.stdout?.on('data', (data) => {
-                if(options.debug) debug(`🐛 stdout: ${data}`);
+                debug(options, `🐛 stdout: ${data}`);
                 handleStd(data, 'stdout');
             });
 
             child.stderr?.on('data', (data) => {
-                if(options.debug) debug(`🐛 stderr: ${data}`);
+                debug(options, `🐛 stderr: ${data}`);
                 handleStd(data, 'stderr');
             });
 
-            if (options.debug) debug(`Waiting for command to finish...`);
+            if (options.debug) debug(options, `Waiting for command to finish...`);
 
             child.on('error', (error) => {
                 if (options.debug) {
@@ -219,9 +233,9 @@ export class CliHandler {
 
             child.on('close', (code) => {
                 if (options.debug) {
-                    debug(`[spawn:close] Command finished with code ${code}`);
-                    debug(`[spawn:close] stdout: ${stdout}`);
-                    debug(`[spawn:close] stderr: ${stderr}`);
+                    debug(options, `[spawn:close] Command finished with code ${code}`);
+                    debug(options, `[spawn:close] stdout: ${stdout}`);
+                    debug(options, `[spawn:close] stderr: ${stderr}`);
                 }
                 
                 // Handle different exit scenarios

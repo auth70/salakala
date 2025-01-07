@@ -123,9 +123,9 @@ In this example:
 
 Uses the 1Password CLI to fetch secrets. Requires the `op` CLI to be installed.
 
-✅ Tested against a real 1Password account in CI
-🧑‍💻 Interactive login via invoking `op`
-🤖 Noninteractive login using environment variables
+- ✅ Tested against a real 1Password account in CI
+- 🧑‍💻 Interactive login via invoking `op`
+- 🤖 Noninteractive login using environment variables
 
 **Format:**
 
@@ -148,9 +148,9 @@ op://Personal/AWS/access-key
 
 Uses the Bitwarden CLI (`bw`) to fetch secrets. Requires the `bw` CLI to be installed. Supports different vault locations.
 
-✅ Tested against a real Bitwarden account in CI
-🧑‍💻 Interactive login via invoking `bw`
-🤖 Noninteractive login using environment variables
+- ✅ Tested against a real Bitwarden account in CI
+- 🧑‍💻 Interactive login via invoking `bw`
+- 🤖 Noninteractive login using environment variables
 
 **Format:**
 ```
@@ -187,9 +187,9 @@ bw://my-folder/my-item/uris/0
 <hr>
 Uses the KeePassXC CLI to fetch secrets from a KeePass database. Requires the `keepassxc-cli` CLI to be installed.
 
-✅ Tested against a real KeePass database in CI
-🧑‍💻 Interactive login via invoking `keepassxc-cli`
-🤖 Noninteractive login using environment variables
+- ✅ Tested against a real KeePass database in CI
+- 🧑‍💻 Interactive login via invoking `keepassxc-cli`
+- 🤖 Noninteractive login using environment variables
 
 **Format:**
 ```
@@ -214,9 +214,9 @@ kp:///Users/me/secrets.kdbx/Web/GitHub/Password
 
 Fetches secrets from AWS Secrets Manager. Requires some form of AWS credentials to be configured. Uses the AWS SDK to fetch secrets.
 
-✅ Tested against a real AWS account in CI
-🧑‍💻 Semi-interactive login
-🤖 Noninteractive login using environment variables
+- ✅ Tested against a real AWS account in CI
+- 🧑‍💻 Semi-interactive login
+- 🤖 Noninteractive login using environment variables
 
 **Format:**
 ```
@@ -251,9 +251,9 @@ awssm://us-east-1/prod/database::password
 
 Fetches secrets from Google Cloud Secret Manager. Requires Google Cloud credentials to be configured. Uses the Google Cloud SDK to fetch secrets.
 
-✅ Tested against a real Google Cloud project in CI
-🧑‍💻 Semi-interactive login
-🤖 Noninteractive login using environment variables
+- ✅ Tested against a real Google Cloud project in CI
+- 🧑‍💻 Semi-interactive login
+- 🤖 Noninteractive login using environment variables
 
 **Format:**
 ```
