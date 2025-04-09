@@ -37,11 +37,11 @@ jobs:
           echo "version_changed=false" >> $GITHUB_OUTPUT
         fi
     
-    - name: Use Node.js 20.x
+    - name: Use Node.js 22.x
       if: steps.check.outputs.version_changed == 'true'
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
+        node-version: '22.x'
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
     
