@@ -36,7 +36,7 @@ describe('GoogleCloudSecretsProvider', () => {
     });
 
     it('should retrieve specific key from secret', async () => {
-        const secret = await provider.getSecret(`gcsm://projects/${projectId}/secrets/test-json-secret/versions/latest:bar`);
+        const secret = await provider.getSecret(`gcsm://projects/${projectId}/secrets/test-json-secret/versions/latest::bar`);
         expect(typeof secret).toBe('string');
         expect(secret.length).toBeGreaterThan(0);
         expect(secret).toBe('baz');
@@ -49,13 +49,13 @@ describe('GoogleCloudSecretsProvider', () => {
     });
 
     it('should throw on invalid key in key-value secret', async () => {
-        await expect(provider.getSecret(`gcsm://projects/${projectId}/secrets/test-json-secret/versions/latest:non-existent-key`))
+        await expect(provider.getSecret(`gcsm://projects/${projectId}/secrets/test-json-secret/versions/latest::non-existent-key`))
             .rejects
             .toThrow(/Key 'non-existent-key' not found in secret/);
     });
 
     it('should handle non-JSON secret with key specified', async () => {
-        await expect(provider.getSecret(`gcsm://projects/${projectId}/secrets/test-plain-secret/versions/latest:some-key`))
+        await expect(provider.getSecret(`gcsm://projects/${projectId}/secrets/test-plain-secret/versions/latest::some-key`))
             .rejects
             .toThrow('Secret is not a valid JSON object but a key was requested');
     });

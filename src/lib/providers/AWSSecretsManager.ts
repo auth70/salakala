@@ -55,10 +55,10 @@ export class AWSSecretsManagerProvider extends SecretProvider {
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved
      */
     async getSecret(path: string): Promise<string> {
-        // Format: awssm://region/secret-name[:key]
-        const match = path.match(/^awssm:\/\/([^\/]+)\/([^:]+)(?::(.+))?$/);
+        // Format: awssm://region/secret-name[::jsonKey]
+        const match = path.match(/^awssm:\/\/([^\/]+)\/([^:]+)(?:::(.+))?$/);
         if (!match) {
-            throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name[:key]');
+            throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name[::jsonKey]');
         }
 
         const [, region, secretId, key] = match;

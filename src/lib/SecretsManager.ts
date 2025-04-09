@@ -5,10 +5,7 @@ import { GoogleCloudSecretsProvider } from "./providers/GoogleCloudSecrets.js";
 import { AWSSecretsManagerProvider } from "./providers/AWSSecretsManager.js";
 import { BitwardenProvider } from "./providers/Bitwarden.js";
 import { AzureKeyVaultProvider } from "./providers/AzureKeyVault.js";
-import { HashiCorpVaultProvider } from "./providers/HashiCorpVault.js";
 import { LastPassProvider } from "./providers/LastPass.js";
-import { DopplerProvider } from "./providers/Doppler.js";
-import { InfisicalProvider } from "./providers/Infisical.js";
 import { KeePassProvider } from "./providers/KeePass.js";
 import { SecretProvider } from "./SecretProvider.js";
 
@@ -34,10 +31,7 @@ export class SecretsManager {
             ['awssm://', new AWSSecretsManagerProvider()],
             ['bw://', new BitwardenProvider()],
             ['azurekv://', new AzureKeyVaultProvider()],
-            ['hcv://', new HashiCorpVaultProvider()],
             ['lp://', new LastPassProvider()],
-            ['doppler://', new DopplerProvider()],
-            ['inf://', new InfisicalProvider()],
             ['kp://', new KeePassProvider()],
         ]);
     }
@@ -59,23 +53,6 @@ export class SecretsManager {
             }
             return value;
         });
-    }
-
-    /**
-     * Determines the appropriate provider for a given secret path based on its prefix.
-     * 
-     * @param {string} secretPath - The secret path containing a provider-specific prefix
-     * @returns {SecretProvider} The matching provider for the secret path
-     * @throws {Error} If no provider matches the secret path's prefix
-     * @private
-     */
-    private getProvider(secretPath: string): SecretProvider {
-        for (const [prefix, provider] of this.providers) {
-            if (secretPath.startsWith(prefix)) {
-                return provider;
-            }
-        }
-        throw new Error(`No provider found for secret path: ${secretPath}`);
     }
 
     /**
@@ -106,7 +83,6 @@ export class SecretsManager {
         // Group secrets by provider prefix
         const secretsByProvider = new Map<string, Map<string, string>>();
         const secrets: Record<string, string> = {};
-        const errors: Error[] = [];
 
         for (const [envVar, secretPath] of Object.entries(secretsConfig)) {
             // Substitute environment variables in the secret path

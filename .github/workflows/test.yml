@@ -19,8 +19,6 @@ on:
         required: true
       BW_PASSWORD:
         required: true
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
 

@@ -23,9 +23,24 @@ salakala does exactly that! It wraps around your manager and generates environme
 
 ## Installation
 
+Install globally to use as a regular CLI:
+
 ```bash
-# Install globally to use the CLI
 npm install -g salakala
+```
+
+Or install in your project:
+
+```bash
+npm install --save-dev salakala
+```
+
+and then add a script to your `package.json`:
+
+```json
+"scripts": {
+    "salakala": "salakala"
+}
 ```
 
 ## Usage
@@ -42,6 +57,9 @@ salakala -s
 
 # Specify an environment
 salakala -e staging
+
+# Specify a different input file
+salakala -i some-config.json
 
 # Specify a different output file
 salakala -o .env.local
@@ -121,9 +139,9 @@ In this example:
 
 <hr>
 
-Uses the 1Password CLI to fetch secrets. Requires the `op` CLI to be installed.
+Requires the 1Password CLI (`op`) to be present.
 
-- ✅ Tested against a real 1Password account in CI
+- ✅ Tested in CI
 - 🧑‍💻 Interactive login via invoking `op`
 - 🤖 Noninteractive login using environment variables
 
@@ -142,13 +160,13 @@ op://Personal/AWS/access-key
 </details>
 
 <details>
-<summary><b>Bitwarden <code>(bw://)</code></b></summary>
+<summary><b>Bitwarden Password Manager <code>(bw://)</code></b></summary>
 
 <hr>
 
-Uses the Bitwarden CLI (`bw`) to fetch secrets. Requires the `bw` CLI to be installed. Supports different vault locations.
+Requires the Bitwarden CLI (`bw`) to be present. Supports different vault locations.
 
-- ✅ Tested against a real Bitwarden account in CI
+- ✅ Tested in CI
 - 🧑‍💻 Interactive login via invoking `bw`
 - 🤖 Noninteractive login using environment variables
 
@@ -185,9 +203,10 @@ bw://my-folder/my-item/uris/0
 <summary><b>KeePassXC <code>(kp://)</code></b></summary>
 
 <hr>
-Uses the KeePassXC CLI to fetch secrets from a KeePass database. Requires the `keepassxc-cli` CLI to be installed.
 
-- ✅ Tested against a real KeePass database in CI
+Requires the KeePassXC CLI (`keepassxc-cli`) to be present.
+
+- ✅ Tested in CI
 - 🧑‍💻 Interactive login via invoking `keepassxc-cli`
 - 🤖 Noninteractive login using environment variables
 
@@ -212,15 +231,13 @@ kp:///Users/me/secrets.kdbx/Web/GitHub/Password
 
 <hr>
 
-Fetches secrets from AWS Secrets Manager. Requires some form of AWS credentials to be configured. Uses the AWS SDK to fetch secrets.
+Fetches secrets from AWS Secrets Manager. Requires some form of AWS credentials to be configured e.g. by installing the AWS CLI and running `aws configure`. Uses the AWS SDK to fetch secrets (the `aws` CLI is not required).
 
-- ✅ Tested against a real AWS account in CI
-- 🧑‍💻 Semi-interactive login
-- 🤖 Noninteractive login using environment variables
+- ✅ Tested in CI
 
 **Format:**
 ```
-awssm://region/secret-name[:key]
+awssm://region/secret-name[::jsonKey]
 ```
 
 **Example: Plaintext secret:**
@@ -249,15 +266,13 @@ awssm://us-east-1/prod/database::password
 
 <hr>
 
-Fetches secrets from Google Cloud Secret Manager. Requires Google Cloud credentials to be configured. Uses the Google Cloud SDK to fetch secrets.
+Fetches secrets from Google Cloud Secret Manager. Requires Google Cloud credentials to be configured, e.g. by installing the Google Cloud CLI and running `gcloud auth login`. Uses the Google Cloud SDK to fetch secrets (the `gcloud` CLI is not required).
 
 - ✅ Tested against a real Google Cloud project in CI
-- 🧑‍💻 Semi-interactive login
-- 🤖 Noninteractive login using environment variables
 
 **Format:**
 ```
-gcsm://projects/project-id/secrets/secret-id/versions/version[:key]
+gcsm://projects/project-id/secrets/secret-id/versions/version[::jsonKey]
 ```
 
 **Example: Plaintext secret:**
@@ -276,28 +291,6 @@ gcsm://projects/my-project/secrets/database/versions/latest
 gcsm://projects/my-project/secrets/database/versions/latest::password
 ```
 <small><i>This will fetch the `password` key from the JSON object in the `database` secret.</i></small>
-
-<hr>
-</details>
-
-<details>
-<summary><b>LastPass <code>(lp://)</code></b></summary>
-
-<hr>
-
-Uses the LastPass CLI to fetch secrets. Requires the `lpass` CLI to be installed.
-
-❌ Needs testing
-
-**Format:**
-```
-lp://group/item-name[/field]
-```
-
-**Example:**
-```
-lp://Personal/AWS/api-key
-```
 
 <hr>
 </details>
@@ -324,79 +317,17 @@ azurekv://my-vault.vault.azure.net/database-password
 <hr>
 </details>
 
-<details>
-<summary><b>HashiCorp Vault <code>(hcv://)</code></b></summary>
-
-<hr>
-
-Fetches secrets from HashiCorp Vault. Requires the `VAULT_ADDR` and `VAULT_TOKEN` environment variables to be set. Uses the HashiCorp Vault SDK to fetch secrets.
-
-❌ Needs testing
-
-**Format:**
-```
-hcv://vault-address/secret/path
-```
-
-**Example:**
-```
-hcv://vault.example.com:8200/secret/data/database/credentials
-```
-
-<hr>
-
-</details>
-
-<details>
-<summary><b>Doppler <code>(doppler://)</code></b></summary>
-
-<hr>
-
-Uses the Doppler CLI to fetch secrets. Requires the Doppler CLI to be installed.
-
-❌ Needs testing
-
-**Format:**
-```
-doppler://project/config/secret-name
-```
-
-**Example:**
-```
-doppler://my-project/dev/DATABASE_URL
-```
-
-<hr>
-</details>
-
-<details>
-<summary><b>Infisical <code>(inf://)</code></b></summary>
-
-<hr>
-
-Uses the Infisical CLI to fetch secrets. Requires the Infisical CLI to be installed.
-
-❌ Needs testing
-
-**Format:**
-```
-inf://workspace/environment/secret-name
-```
-
-**Example:**
-```
-inf://my-project/dev/DATABASE_URL
-```
-
-<hr>
-</details>
-
+If you want to add a new provider, you can do so by extending the `SecretProvider` class and adding it to the `providers` map in `src/lib/SecretsManager.ts`. Please submit a PR and make tests for it!
 
 ## Recommendations
 
 - ✅ DO commit `salakala.json` - it should only contain paths to secrets, not the secrets themselves
 - ❌ DON'T commit generated `.env` files
 - Add `.env*` to your `.gitignore`
+
+## Thanks to
+
+- [1Password](https://1password.com) for sponsoring a team license used for testing.
 
 ## Contributing
 

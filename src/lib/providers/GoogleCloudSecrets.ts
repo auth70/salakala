@@ -36,17 +36,17 @@ export class GoogleCloudSecretsProvider extends SecretProvider {
      * Retrieves a secret value from Google Cloud Secret Manager.
      * 
      * @param {string} path - The Google Cloud secret reference path
-     *                        Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[:key]
-     *                        Example: gcsm://projects/my-project/secrets/api-key/versions/latest:api-key
+     *                        Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[::jsonKey]
+     *                        Example: gcsm://projects/my-project/secrets/api-key/versions/latest::apiKey
      * @returns {Promise<string>} The secret value
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved.
      *                 Provides detailed authentication instructions if authentication fails.
      */
     async getSecret(path: string): Promise<string> {
-        // Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[:key]
-        const match = path.match(/^gcsm:\/\/projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/([^:]+)(?::(.+))?$/);
+        // Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[::jsonKey]
+        const match = path.match(/^gcsm:\/\/projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/([^:]+)(?:::(.+))?$/);
         if (!match) {
-            throw new Error('Invalid Google Cloud secret path');
+            throw new Error('Invalid Google Cloud secret path format. Expected: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[::jsonKey]');
         }
 
         const [, projectId, secretId, version, key] = match;

@@ -1,5 +1,34 @@
 import { execSync } from 'child_process';
 import { SecretProvider } from '../SecretProvider.js';
+import { CliHandler } from '../CliHandler.js';
+import inquirer from 'inquirer';
+
+/*
+[
+  {
+    "id": "6754388171590937865",
+    "name": "test",
+    "fullname": "test-folder/test",
+    "username": "testuser",
+    "password": "testpassword",
+    "last_modified_gmt": "1736306225",
+    "last_touch": "0",
+    "group": "test-folder",
+    "url": "http://google.com",
+    "note": "{\"foo\":\"bar\",\"baz\":{\"lorem\":[\"ipsum\",\"dolor\"]}}" 
+  } 
+] 
+*/
+type LastPassItem = {
+    id: string;
+    name: string;
+    fullname: string;
+    username?: string;
+    password?: string;
+    group?: string;
+    url?: string;
+    note?: string;
+}
 
 /**
  * Provider for accessing secrets stored in LastPass using the LastPass CLI (lpass).
@@ -13,10 +42,84 @@ import { SecretProvider } from '../SecretProvider.js';
  */
 export class LastPassProvider extends SecretProvider {
     /**
-     * Flag indicating whether we have successfully authenticated in this session.
+     * Flag indicating whether we have successfully logged in in this session.
      * @private
      */
-    private isAuthenticated: boolean = false;
+    private isLoggedIn: boolean = false;
+    private cli: CliHandler;
+    private folders: string[] = [];
+
+    constructor() {
+        super();
+        this.cli = new CliHandler();
+    }
+
+    async checkLogin() {
+        const result = await this.cli.run('lpass status');
+        if(result.state !== "ok" && result.state !== 'error') {
+            throw new Error(result.error?.message || result.message || 'Unable to run lpass status');
+        }
+        if(result.stdout.includes('Not logged in')) {
+            this.isLoggedIn = false;
+            console.log('❌ LastPass CLI is not logged in.');
+            await this.tryLogin();
+        } else if(result.stdout.includes('Logged in as')) {
+            this.isLoggedIn = true;
+            console.log('✅ LastPass CLI is logged in.');
+        } else {
+            console.error(result);
+            throw new Error('Failed to parse lpass status output');
+        }
+    }
+
+    /* 
+% lpass ls -l --color=never
+(none)/test [id: 6189975547628296505]
+(none)/top-level-secure-note [id: 9120810406532001297]
+custom-field-test-folder/custom-field-test [id: 6922534590124668849]
+test-folder/test [id: 6754388171590937865]
+     */
+    async getItems(): Promise<{ path: string, id: string }[]> {
+        const result = await this.cli.run('lpass ls --color=never');
+        const lines = result.stdout.split('\n').filter(line => line.trim() !== '');
+        return lines.map(line => {
+            const match = line.match(/^(.+)\/(.+)\s+\[id: (\d+)\]/);
+            if(!match) {
+                return null;
+            }
+            let [, folder, itemName, id] = match;
+            if(folder === '(none)') {
+                folder = '';
+            } else {
+                folder += '/';
+            }
+            return {path: `${folder}${itemName}`, id};
+        }).filter((m): m is { path: string, id: string } => m !== null);
+    }
+
+    async tryLogin() {
+        console.log('The LastPass CLI needs your username to be passed in as an argument when logging in. Please enter it now.');
+        const promptResult = await inquirer.prompt({
+            type: 'input',
+            name: 'username',
+            message: 'Enter your LastPass username:',
+        });
+        console.log('🔑 LastPass needs to login. You are interacting with LastPass CLI now.');
+        const result = await this.cli.run(`lpass login ${promptResult.username}`, {
+            interactive: true,
+        });
+        if(result.state !== 'ok') {
+            throw new Error(result.error?.message || result.message || 'Unable to run lpass login');
+        }
+        if(result.stdout.includes('Logged in as')) {
+            this.isLoggedIn = true;
+        } else if(result.stdout.includes('Failed to enter correct password')) {
+            throw new Error('Failed to enter correct password');
+        } else {
+            console.error(result);
+            throw new Error('Failed to parse lpass login output');
+        }
+    }
 
     /**
      * Retrieves a secret value from LastPass using the CLI.
@@ -28,68 +131,37 @@ export class LastPassProvider extends SecretProvider {
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved
      */
     async getSecret(path: string): Promise<string> {
-        // Format: lp://group/item-name[/field]
-        if (!path.startsWith('lp://')) {
-            throw new Error('Invalid LastPass secret path');
+
+        await this.checkLogin();
+
+        const parsedPath = this.parsePath(path);
+        const items = await this.getItems();
+        let queryPath = parsedPath.path;
+
+        if(parsedPath.pathParts.length === 3) {
+            path = parsedPath.pathParts[0] + '/' + parsedPath.pathParts[1];
         }
 
-        const secretPath = path.replace('lp://', '');
-        
-        try {
-            // Try to get the secret if we're already authenticated
-            if (this.isAuthenticated) {
-                return await this.getSecretValue(secretPath);
-            }
-            
-            // If not authenticated, try anyway (might work if already logged in from another session)
-            const result = await this.getSecretValue(secretPath);
-            this.isAuthenticated = true;
-            return result;
-        } catch (error: unknown) {
-            // Attempt to sign in and retry once
-            try {
-                // Login using the CLI with the --trust flag to remember the device
-                execSync('lpass login --trust', {
-                    encoding: 'utf-8',
-                    stdio: 'inherit'
-                });
+        console.log('queryPath ', queryPath);
+        console.log('path ', path);
+        console.log('items ', items);
 
-                this.isAuthenticated = true;
-                // Retry fetching the secret after successful login
-                return await this.getSecretValue(secretPath);
-            } catch (retryError: unknown) {
-                if (retryError instanceof Error) {
-                    throw new Error(`Failed to read LastPass secret: ${retryError.message}`);
-                }
-                throw new Error('Failed to read LastPass secret: Unknown error');
-            }
+        const item = items.find(item => item.path === queryPath);
+        if(!item) {
+            throw new Error(`Item '${path}' not found`);
         }
+        const itemId = item.id;
+
+        const result = await this.cli.run(`lpass show --all -j "${itemId}"`);
+        if(result.state !== 'ok') {
+            throw new Error(result.error?.message || result.message || `Unable to run lpass show for path '${path}'`);
+        }
+        const json = JSON.parse(result.stdout) as LastPassItem[];
+        console.log('json ', json);
+        if(json.length === 0) {
+            throw new Error(`No secret found at path '${path}'`);
+        }
+        return json[0].password!;
     }
 
-    /**
-     * Internal helper method to execute the LastPass CLI command and retrieve the secret value.
-     * 
-     * @param {string} secretPath - The LastPass secret path without the 'lp://' prefix
-     * @returns {Promise<string>} The secret value
-     * @throws {Error} If the secret cannot be retrieved or the value is empty
-     * @private
-     */
-    private async getSecretValue(secretPath: string): Promise<string> {
-        // Execute the command to show only the password field of the item
-        const result = execSync(`lpass show --password "${secretPath}"`, {
-            encoding: 'utf-8',
-            stdio: ['inherit', 'pipe', 'pipe']
-        });
-
-        if (!result) {
-            throw new Error(`No value found for secret at path '${secretPath}'`);
-        }
-
-        const value = result.trim();
-        if (!value) {
-            throw new Error(`No value found for secret at path '${secretPath}'`);
-        }
-
-        return value;
-    }
 } 

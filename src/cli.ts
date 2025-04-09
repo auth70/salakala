@@ -5,20 +5,19 @@ import { SecretsManager } from './lib/SecretsManager.js';
 import { program } from '@commander-js/extra-typings';
 import { escapeEnvValue } from './lib/envEscape.js';
 
-const packageJson = JSON.parse(readFileSync(import.meta.dirname + '/../package.json', 'utf-8'));
-const version = packageJson.version;
+const PACKAGE_VERSION = '0.6.0';
 
 program
     .name('salakala')
     .description('Generate .env files from various secret providers')
-    .version(version);
+    .version(PACKAGE_VERSION);
 
 program
-    .option('-e, --env <environment>', 'environment to use from salakala.json', 'development')
+    .option('-i, --input <file>', 'input salakala json file path', 'salakala.json')
+    .option('-e, --env <environment>', 'environment to use from input file', 'development')
     .option('-o, --output <file>', 'output file path', '.env')
     .option('-w, --overwrite', 'overwrite the output file instead of merging with existing values')
     .option('-s, --set', 'set environment variables in the current shell instead of writing to a file')
-    .option('-f, --file <file>', 'salakala.json file path', 'salakala.json')
     .action(async (options) => {
         try {
             const width = process.stdout.columns;
@@ -31,7 +30,7 @@ program
             }
             
             const manager = new SecretsManager();
-            const secrets = await manager.loadSecrets(options.file, options.env);
+            const secrets = await manager.loadSecrets(options.input, options.env);
 
             if(options.set) {
                 Object.entries(secrets).forEach(([key, value]) => {
