@@ -3,7 +3,7 @@
     "bin": {
         "salakala": "./dist/cli.js"
     },
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Generate environment variables from various secret providers via URIs in JSON files, checked into your repository",
     "type": "module",
     "scripts": {
@@ -45,6 +45,6 @@
         "node-vault": "^0.10.5"
     },
     "overrides": {
-        "whatwg-url": "^14.1.0"
+        "whatwg-url": "^15.1.0"
     }
 }

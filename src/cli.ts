@@ -35,7 +35,7 @@ function resolveInputFile(input: string): string {
     throw new Error(`Configuration file '${input}' not found`);
 }
 
-const PACKAGE_VERSION = '1.0.1';
+const PACKAGE_VERSION = '1.0.4';
 
 program
     .name('salakala')
