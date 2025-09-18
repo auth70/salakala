@@ -4,6 +4,7 @@ import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { SecretsManager } from './lib/SecretsManager.js';
 import { program } from '@commander-js/extra-typings';
 import { escapeEnvValue } from './lib/envEscape.js';
+import inquirer from 'inquirer';
 
 /**
  * Resolves the input file path with smart fallback logic.
@@ -35,6 +36,53 @@ function resolveInputFile(input: string): string {
     throw new Error(`Configuration file '${input}' not found`);
 }
 
+/**
+ * Detects available environments from a config file.
+ * Returns null for flat configs, or array of environment names for nested configs.
+ * 
+ * @param {string} configPath - Path to the configuration file
+ * @returns {string[] | null} Array of environment names or null if flat config
+ */
+function detectEnvironments(configPath: string): string[] | null {
+    try {
+        const configContent = readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        
+        // Check if this has nested environments (values are objects)
+        const environmentKeys = Object.keys(config).filter(key => 
+            typeof config[key] === 'object' && config[key] !== null && !Array.isArray(config[key])
+        );
+        
+        if (environmentKeys.length === 0) { 
+            return null; // Flat config, no environments
+        }
+        
+        // Return environment names
+        return environmentKeys;
+    } catch (error) {
+        return null; // If we can't parse it, assume flat config
+    }
+}
+
+/**
+ * Prompts user to select an environment interactively.
+ * 
+ * @param {string[]} environments - Available environments
+ * @returns {Promise<string>} Selected environment
+ */
+async function promptForEnvironment(environments: string[]): Promise<string> {
+    const { selectedEnvironment } = await inquirer.prompt([
+        {
+            type: 'list',
+            name: 'selectedEnvironment',
+            message: 'Select an environment:',
+            choices: environments,
+            loop: false
+        }
+    ]);
+    return selectedEnvironment;
+}
+
 const PACKAGE_VERSION = '1.0.4';
 
 program
@@ -44,7 +92,7 @@ program
 
 program
     .option('-i, --input <file>', 'input config file path or environment name (e.g., "local" → "salakala.local.json")', 'salakala.json')
-    .option('-e, --env <environment>', 'environment to use from input file', 'development')
+    .option('-e, --env <environment>', 'environment to use from input file (interactive selection if not provided)')
     .option('-o, --output <file>', 'output file path', '.env')
     .option('-w, --overwrite', 'overwrite the output file instead of merging with existing values')
     .option('-s, --set', 'set environment variables in the current shell instead of writing to a file')
@@ -53,15 +101,32 @@ program
             const width = process.stdout.columns;
             const padding = Math.floor((width - options.output.length) / 2);
 
+            const manager = new SecretsManager();
+            const resolvedInputFile = resolveInputFile(options.input);
+            
+            // Determine environment to use
+            let environment = options.env;
+            
+            // If no environment specified, check if config has environments
+            if (!environment) {
+                const availableEnvironments = detectEnvironments(resolvedInputFile);
+                
+                if (availableEnvironments && availableEnvironments.length > 0) {
+                    // Interactive environment selection
+                    environment = await promptForEnvironment(availableEnvironments);
+                } else {
+                    // Flat config, use default
+                    environment = 'development';
+                }
+            }
+
             if(!options.set) {
                 console.log(`${'-'.repeat(padding)}`);
-                console.log(`🐟 Generating ${options.output} file for environment: '${options.env}'`);
+                console.log(`🐟 Generating ${options.output} file for environment: '${environment}'`);
                 console.log(`${'-'.repeat(padding)}`);
             }
             
-            const manager = new SecretsManager();
-            const resolvedInputFile = resolveInputFile(options.input);
-            const secrets = await manager.loadSecrets(resolvedInputFile, options.env);
+            const secrets = await manager.loadSecrets(resolvedInputFile, environment);
 
             if(options.set) {
                 Object.entries(secrets).forEach(([key, value]) => {
@@ -95,7 +160,7 @@ program
                 writeFileSync(options.output, envContent + '\n');
                 console.log(`${'-'.repeat(padding)}`);
                 const mode = options.overwrite ? 'overwrote' : 'updated';
-                console.log(`💾 Successfully ${mode} ${options.output} using '${options.env}' environment 🔒🐟`);
+                console.log(`💾 Successfully ${mode} ${options.output} using '${environment}' environment 🔒🐟`);
                 console.log(`${'-'.repeat(padding)}`);
             }
         } catch (error) {
