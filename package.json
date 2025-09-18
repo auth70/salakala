@@ -1,9 +1,9 @@
 {
     "name": "salakala",
     "bin": {
-        "salakala": "./dist/cli.js"
+        "salakala": "dist/cli.js"
     },
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Generate environment variables from various secret providers via URIs in JSON files, checked into your repository",
     "type": "module",
     "scripts": {
@@ -14,7 +14,10 @@
         "prepare": "npm run build"
     },
     "homepage": "https://github.com/auth70/salakala",
-    "repository": "github:auth70/salakala",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/auth70/salakala.git"
+    },
     "contributors": [
         {
             "name": "miunau",
