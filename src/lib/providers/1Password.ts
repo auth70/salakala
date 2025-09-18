@@ -30,25 +30,38 @@ export class OnePasswordProvider extends SecretProvider {
      * Retrieves a secret value from 1Password using the CLI.
      * 
      * @param {string} path - The 1Password secret reference path
-     *                        Format: op://vault-name/item-name/[section-name/]field-name
+     *                        Format: op://vault-name/item-name/[section-name/]field-name[::jsonKey]
      *                        Example: op://Development/API Keys/production/access_token
+     *                        Example with JSON: op://Development/config/database::host
      * @returns {Promise<string>} The secret value
      * @throws {Error} If the path is invalid or secret cannot be retrieved
      */
     async getSecret(path: string): Promise<string> {
-        // Format: op://vault-name/item-name/[section-name/]field-name
+        // Format: op://vault-name/item-name/[section-name/]field-name[::jsonKey]
         if (!path.startsWith('op://')) {
             throw new Error('Invalid 1Password secret path');
         }
 
+        // Parse the path to separate the 1Password reference from any JSON key
+        const parsedPath = this.parsePath(path);
+        const opPath = `${parsedPath.scheme}://${parsedPath.path}`;
+
         try {
             // Try to get the secret using cached session token if available
+            let secretValue: string;
             if (this.sessionToken) {
-                return await this.getSecretValue(path, this.sessionToken);
+                secretValue = await this.getSecretValue(opPath, this.sessionToken);
+            } else {
+                // If no session token, try without it (might work if user is already signed in)
+                secretValue = await this.getSecretValue(opPath);
             }
-            
-            // If no session token, try without it (might work if user is already signed in)
-            return await this.getSecretValue(path);
+
+            // If there's a JSON key, parse and extract the value
+            if (parsedPath.jsonKey) {
+                return this.returnPossibleJsonValue(secretValue, parsedPath.jsonKey);
+            }
+
+            return secretValue;
         } catch (error: unknown) {
             // Only attempt interactive signin if not using service account token
             if (!process.env.OP_SERVICE_ACCOUNT_TOKEN) {
@@ -65,7 +78,14 @@ export class OnePasswordProvider extends SecretProvider {
                     this.sessionToken = loginResponse.stdout.trim();
 
                     // Retry with the new session token
-                    return await this.getSecretValue(path, this.sessionToken);
+                    const secretValue = await this.getSecretValue(opPath, this.sessionToken);
+
+                    // If there's a JSON key, parse and extract the value
+                    if (parsedPath.jsonKey) {
+                        return this.returnPossibleJsonValue(secretValue, parsedPath.jsonKey);
+                    }
+
+                    return secretValue;
                 } catch (retryError: unknown) {
                     if (retryError instanceof Error) {
                         throw new Error(`Failed to read 1Password secret: ${retryError.message}`);

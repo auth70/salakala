@@ -17,7 +17,7 @@ describe('AzureKeyVaultProvider', () => {
     it('should throw error for invalid path format', async () => {
         await expect(provider.getSecret('invalid-path'))
             .rejects
-            .toThrow('Invalid Azure Key Vault path format');
+            .toThrow('Invalid URI: invalid-path');
     });
 
     it('should retrieve secret successfully', async () => {
@@ -66,5 +66,52 @@ describe('AzureKeyVaultProvider', () => {
         await expect(provider.getSecret('azurekv://my-vault.vault.azure.net/secret-name'))
             .rejects
             .toThrow('Failed to read Azure Key Vault secret: Azure API error');
+    });
+
+    it('should retrieve JSON secret with :: syntax', async () => {
+        const mockSecret = { value: '{"key": "test-json-value", "nested": {"value": "nested-test-value"}}' };
+        const mockGetSecret = vi.fn().mockResolvedValue(mockSecret);
+        
+        vi.mocked(SecretClient).mockImplementation(() => ({
+            getSecret: mockGetSecret
+        } as unknown as SecretClient));
+
+        vi.mocked(DefaultAzureCredential).mockImplementation(() => ({} as any));
+
+        const result = await provider.getSecret('azurekv://my-vault.vault.azure.net/json-secret::key');
+        
+        expect(result).toBe('test-json-value');
+        expect(mockGetSecret).toHaveBeenCalledWith('json-secret');
+    });
+
+    it('should retrieve nested JSON secret with :: syntax', async () => {
+        const mockSecret = { value: '{"key": "test-json-value", "nested": {"value": "nested-test-value"}}' };
+        const mockGetSecret = vi.fn().mockResolvedValue(mockSecret);
+        
+        vi.mocked(SecretClient).mockImplementation(() => ({
+            getSecret: mockGetSecret
+        } as unknown as SecretClient));
+
+        vi.mocked(DefaultAzureCredential).mockImplementation(() => ({} as any));
+
+        const result = await provider.getSecret('azurekv://my-vault.vault.azure.net/json-secret::nested.value');
+        
+        expect(result).toBe('nested-test-value');
+        expect(mockGetSecret).toHaveBeenCalledWith('json-secret');
+    });
+
+    it('should throw on non-existent JSON key with :: syntax', async () => {
+        const mockSecret = { value: '{"key": "test-json-value"}' };
+        const mockGetSecret = vi.fn().mockResolvedValue(mockSecret);
+        
+        vi.mocked(SecretClient).mockImplementation(() => ({
+            getSecret: mockGetSecret
+        } as unknown as SecretClient));
+
+        vi.mocked(DefaultAzureCredential).mockImplementation(() => ({} as any));
+
+        await expect(provider.getSecret('azurekv://my-vault.vault.azure.net/json-secret::nonExistentKey'))
+            .rejects
+            .toThrow(/Key nonExistentKey not found in JSON object/);
     });
 }); 

@@ -13,7 +13,7 @@ describe('AWSSecretsManagerProvider', () => {
     it('should throw error for invalid path format', async () => {
         await expect(provider.getSecret('invalid-path'))
             .rejects
-            .toThrow('Invalid AWS secret path format');
+            .toThrow('Invalid URI: invalid-path');
     });
 
     it('should retrieve entire secret as JSON when no key specified', async () => {
@@ -47,12 +47,12 @@ describe('AWSSecretsManagerProvider', () => {
     it('should throw on invalid key in key-value secret', async () => {
         await expect(provider.getSecret(`awssm://${region}/test/test-secret::non-existent-key`))
             .rejects
-            .toThrow(/Key 'non-existent-key' not found in secret/);
+            .toThrow(/Key non-existent-key not found in JSON object/);
     });
 
     it('should handle non-JSON secret with key specified', async () => {
         await expect(provider.getSecret(`awssm://${region}/test/test-plain-secret::some-key`))
             .rejects
-            .toThrow('Secret is not a valid JSON object but a key was requested');
+            .toThrow(/Key some-key not found in JSON object/);
     });
 });

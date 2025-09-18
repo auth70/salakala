@@ -16,7 +16,7 @@ describe('KeePassProvider', () => {
     it('should throw error for invalid path format', async () => {
         await expect(provider.getSecret('invalid-path'))
             .rejects
-            .toThrow('Invalid KeePass secret path');
+            .toThrow('Invalid URI: invalid-path');
     });
 
     it('should throw error for incomplete path', async () => {
@@ -45,5 +45,21 @@ describe('KeePassProvider', () => {
         await expect(provider.getSecret(`kp://${testDbPath}/test/NonExistentAttribute`))
             .rejects
             .toThrow('unknown attribute NonExistentAttribute');
+    });
+
+    it('should retrieve JSON secret with :: syntax', async () => {
+        const result = await provider.getSecret(`kp://${testDbPath}/json-test-entry/Notes::key`);
+        expect(result).toBe('test-json-value');
+    });
+
+    it('should retrieve nested JSON secret with :: syntax', async () => {
+        const result = await provider.getSecret(`kp://${testDbPath}/json-test-entry/Notes::nested.value`);
+        expect(result).toBe('nested-test-value');
+    });
+
+    it('should throw on non-existent JSON key with :: syntax', async () => {
+        await expect(provider.getSecret(`kp://${testDbPath}/json-test-entry/Notes::nonExistentKey`))
+            .rejects
+            .toThrow(/Key nonExistentKey not found in JSON object/);
     });
 }); 

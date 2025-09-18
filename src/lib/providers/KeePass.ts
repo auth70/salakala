@@ -30,18 +30,18 @@ export class KeePassProvider extends SecretProvider {
      * Retrieves a secret value from a KeePass database using the KeePassXC CLI.
      * 
      * @param {string} path - The KeePass secret reference path
-     *                        Format: kp://path/to/database.kdbx/entry-name/attribute
+     *                        Format: kp://path/to/database.kdbx/entry-name/attribute[::jsonKey]
      *                        Example: kp:///path/to/db.kdbx/github/Password
+     *                        Example with JSON: kp:///path/to/db.kdbx/config/Notes::database.host
      * @returns {Promise<string>} The secret value
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved
      */
     async getSecret(path: string): Promise<string> {
-        // Format: kp://path/to/database.kdbx/entry-name/attribute
-        if (!path.startsWith('kp://')) {
-            throw new Error('Invalid KeePass secret path');
-        }
-
-        const secretPath = path.replace('kp://', '');
+        // Parse the path to separate the KeePass reference from any JSON key
+        const parsedPath = this.parsePath(path);
+        
+        // Format: kp://path/to/database.kdbx/entry-name/attribute[::jsonKey]
+        const secretPath = parsedPath.path;
         const parts = secretPath.split('/');
         
         // Find the part that ends with .kdbx to separate database path from entry path
@@ -54,7 +54,7 @@ export class KeePassProvider extends SecretProvider {
         }
 
         if (dbPathEndIndex === -1 || dbPathEndIndex >= parts.length - 2) {
-            throw new Error('Invalid KeePass path format. Expected: kp://path/to/database.kdbx/entry-name/attribute');
+            throw new Error('Invalid KeePass path format. Expected: kp://path/to/database.kdbx/entry-name/attribute[::jsonKey]');
         }
 
         // Split the path into components
@@ -62,10 +62,12 @@ export class KeePassProvider extends SecretProvider {
         const entryName = parts[dbPathEndIndex + 1];
         const attribute = parts[dbPathEndIndex + 2];
 
+        let secretValue: string;
+
         // Try with stored password first if available
         if (this.password) {
             try {
-                return await this.getSecretValue(dbPath, entryName, attribute, this.password);
+                secretValue = await this.getSecretValue(dbPath, entryName, attribute, this.password);
             } catch (error: unknown) {
                 // If using stored password, or other error, throw directly
                 if (error instanceof Error) {
@@ -87,7 +89,7 @@ export class KeePassProvider extends SecretProvider {
                 if (!value) {
                     throw new Error(`No value found for entry '${entryName}' attribute '${attribute}' in database '${dbPath}'`);
                 }
-                return value;
+                secretValue = value;
             } catch (retryError: unknown) {
                 if (retryError instanceof Error) {
                     throw new Error(`Failed to read KeePass secret: ${retryError.message}`);
@@ -95,6 +97,13 @@ export class KeePassProvider extends SecretProvider {
                 throw new Error('Failed to read KeePass secret: Unknown error');
             }
         }
+
+        // If there's a JSON key, parse and extract the value
+        if (parsedPath.jsonKey) {
+            return this.returnPossibleJsonValue(secretValue, parsedPath.jsonKey);
+        }
+
+        return secretValue;
     }
 
     /**

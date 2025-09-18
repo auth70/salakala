@@ -51,19 +51,23 @@ export class AzureKeyVaultProvider extends SecretProvider {
      * Retrieves a secret value from Azure Key Vault.
      * 
      * @param {string} path - The Azure Key Vault secret reference path
-     *                        Format: azurekv://vault-name.vault.azure.net/secret-name
+     *                        Format: azurekv://vault-name.vault.azure.net/secret-name[::jsonKey]
      *                        Example: azurekv://my-vault.vault.azure.net/my-secret
+     *                        Example with JSON: azurekv://my-vault.vault.azure.net/config::database.host
      * @returns {Promise<string>} The secret value
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved
      */
     async getSecret(path: string): Promise<string> {
-        // Format: azurekv://vault-name.vault.azure.net/secret-name
-        const match = path.match(/^azurekv:\/\/([^\/]+)\/(.+)$/);
-        if (!match) {
-            throw new Error('Invalid Azure Key Vault path format. Expected: azurekv://vault-name.vault.azure.net/secret-name');
+        // Parse the path to separate the Azure reference from any JSON key
+        const parsedPath = this.parsePath(path);
+        
+        // Extract vault URL and secret name from the parsed path
+        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
+        if (!pathMatch) {
+            throw new Error('Invalid Azure Key Vault path format. Expected: azurekv://vault-name.vault.azure.net/secret-name[::jsonKey]');
         }
 
-        const [, vaultUrl, secretName] = match;
+        const [, vaultUrl, secretName] = pathMatch;
         const fullVaultUrl = `https://${vaultUrl}`;
         const client = this.getClient(fullVaultUrl);
 
@@ -75,10 +79,24 @@ export class AzureKeyVaultProvider extends SecretProvider {
                 throw new Error('Secret value is empty');
             }
 
+            const secretValue = response.value;
+
+            // If there's a JSON key, parse and extract the value
+            if (parsedPath.jsonKey) {
+                return this.returnPossibleJsonValue(secretValue, parsedPath.jsonKey);
+            }
+
             // Azure Key Vault returns base64 encoded strings for binary secrets automatically
-            return response.value;
+            return secretValue;
         } catch (error: unknown) {
             if (error instanceof Error) {
+                // If it's our own error, throw it directly
+                if (error.message.includes('Key') || 
+                    error.message.includes('JSON') || 
+                    error.message.includes('empty')) {
+                    throw error;
+                }
+
                 const errorMessage = error.message.toLowerCase();
                 // Check for common authentication/credentials errors
                 if (errorMessage.includes('authentication failed') || 

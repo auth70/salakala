@@ -49,19 +49,23 @@ export class AWSSecretsManagerProvider extends SecretProvider {
      * Retrieves a secret value from AWS Secrets Manager.
      * 
      * @param {string} path - The AWS Secrets Manager reference path
-     *                        Format: awssm://region/secret-name
+     *                        Format: awssm://region/secret-name[::jsonKey]
      *                        Example: awssm://us-east-1/production/database-password
+     *                        Example with JSON: awssm://us-east-1/config/database::host
      * @returns {Promise<string>} The secret value
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved
      */
     async getSecret(path: string): Promise<string> {
-        // Format: awssm://region/secret-name[::jsonKey]
-        const match = path.match(/^awssm:\/\/([^\/]+)\/([^:]+)(?:::(.+))?$/);
-        if (!match) {
+        // Parse the path to separate the AWS reference from any JSON key
+        const parsedPath = this.parsePath(path);
+        
+        // Extract region and secret name from the path
+        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
+        if (!pathMatch) {
             throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name[::jsonKey]');
         }
 
-        const [, region, secretId, key] = match;
+        const [, region, secretId] = pathMatch;
         const client = this.getClient(region);
 
         try {
@@ -75,23 +79,9 @@ export class AWSSecretsManagerProvider extends SecretProvider {
             const secretValue = response.SecretString || 
                 Buffer.from(response.SecretBinary!).toString();
 
-            // If a key is specified, parse as JSON and get that key
-            if (key) {
-                try {
-                    const parsed = JSON.parse(secretValue);
-                    if (typeof parsed !== 'object' || parsed === null) {
-                        throw new Error('Secret is not a valid JSON object but a key was requested');
-                    }
-                    if (!(key in parsed)) {
-                        throw new Error(`Key '${key}' not found in secret`);
-                    }
-                    return String(parsed[key]);
-                } catch (e) {
-                    if (e instanceof Error && e.message.includes('Key')) {
-                        throw e;
-                    }
-                    throw new Error('Secret is not a valid JSON object but a key was requested');
-                }
+            // If there's a JSON key, parse and extract the value
+            if (parsedPath.jsonKey) {
+                return this.returnPossibleJsonValue(secretValue, parsedPath.jsonKey);
             }
 
             // If no key specified, return the raw value

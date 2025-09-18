@@ -37,19 +37,23 @@ export class GoogleCloudSecretsProvider extends SecretProvider {
      * 
      * @param {string} path - The Google Cloud secret reference path
      *                        Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[::jsonKey]
-     *                        Example: gcsm://projects/my-project/secrets/api-key/versions/latest::apiKey
+     *                        Example: gcsm://projects/my-project/secrets/api-key/versions/latest
+     *                        Example with JSON: gcsm://projects/my-project/secrets/config/versions/latest::database.host
      * @returns {Promise<string>} The secret value
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved.
      *                 Provides detailed authentication instructions if authentication fails.
      */
     async getSecret(path: string): Promise<string> {
-        // Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[::jsonKey]
-        const match = path.match(/^gcsm:\/\/projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/([^:]+)(?:::(.+))?$/);
-        if (!match) {
+        // Parse the path to separate the GCS reference from any JSON key
+        const parsedPath = this.parsePath(path);
+        
+        // Extract project, secret, and version from the parsed path
+        const pathMatch = parsedPath.path.match(/^projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/(.+)$/);
+        if (!pathMatch) {
             throw new Error('Invalid Google Cloud secret path format. Expected: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[::jsonKey]');
         }
 
-        const [, projectId, secretId, version, key] = match;
+        const [, projectId, secretId, version] = pathMatch;
         const secretPath = `projects/${projectId}/secrets/${secretId}/versions/${version}`;
 
         try {
@@ -63,28 +67,17 @@ export class GoogleCloudSecretsProvider extends SecretProvider {
             }
 
             // Convert to string if it's a Buffer
-            const value = typeof response.payload.data === 'string' 
+            const secretValue = typeof response.payload.data === 'string' 
                 ? response.payload.data 
                 : Buffer.from(response.payload.data).toString();
 
-            // If a key is specified, treat as JSON and get that key
-            if (key) {
-                try {
-                    const parsed = JSON.parse(value);
-                    if (!(key in parsed)) {
-                        throw new Error(`Key '${key}' not found in secret`);
-                    }
-                    return String(parsed[key]);
-                } catch (e) {
-                    if (e instanceof Error && e.message.includes('Key')) {
-                        throw e;
-                    }
-                    throw new Error('Secret is not a valid JSON object but a key was requested');
-                }
+            // If there's a JSON key, parse and extract the value
+            if (parsedPath.jsonKey) {
+                return this.returnPossibleJsonValue(secretValue, parsedPath.jsonKey);
             }
 
             // No key specified, return as is
-            return value.trim();
+            return secretValue.trim();
 
         } catch (error: unknown) {
             if (error instanceof Error) {

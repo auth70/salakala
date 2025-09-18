@@ -3,8 +3,8 @@
     "bin": {
         "salakala": "./dist/cli.js"
     },
-    "version": "0.6.4",
-    "description": "Generate .env files from various secret providers",
+    "version": "1.0.0",
+    "description": "Generate environment variables from various secret providers via URIs in JSON files, checked into your repository",
     "type": "module",
     "scripts": {
         "build": "node set_version.cjs && tsc",

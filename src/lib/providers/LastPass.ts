@@ -125,8 +125,9 @@ test-folder/test [id: 6754388171590937865]
      * Retrieves a secret value from LastPass using the CLI.
      * 
      * @param {string} path - The LastPass secret reference path
-     *                        Format: lp://group/item-name[/field]
+     *                        Format: lp://group/item-name[/field][::jsonKey]
      *                        Example: lp://Development/API Keys/password
+     *                        Example with JSON: lp://Development/config/notes::database.host
      * @returns {Promise<string>} The secret value
      * @throws {Error} If the path is invalid, authentication fails, or secret cannot be retrieved
      */
@@ -137,31 +138,66 @@ test-folder/test [id: 6754388171590937865]
         const parsedPath = this.parsePath(path);
         const items = await this.getItems();
         let queryPath = parsedPath.path;
+        let fieldName = 'password'; // Default field
 
         if(parsedPath.pathParts.length === 3) {
-            path = parsedPath.pathParts[0] + '/' + parsedPath.pathParts[1];
+            queryPath = parsedPath.pathParts[0] + '/' + parsedPath.pathParts[1];
+            fieldName = parsedPath.pathParts[2];
         }
 
         console.log('queryPath ', queryPath);
-        console.log('path ', path);
+        console.log('fieldName ', fieldName);
         console.log('items ', items);
 
         const item = items.find(item => item.path === queryPath);
         if(!item) {
-            throw new Error(`Item '${path}' not found`);
+            throw new Error(`Item '${queryPath}' not found`);
         }
         const itemId = item.id;
 
         const result = await this.cli.run(`lpass show --all -j "${itemId}"`);
         if(result.state !== 'ok') {
-            throw new Error(result.error?.message || result.message || `Unable to run lpass show for path '${path}'`);
+            throw new Error(result.error?.message || result.message || `Unable to run lpass show for path '${queryPath}'`);
         }
         const json = JSON.parse(result.stdout) as LastPassItem[];
         console.log('json ', json);
         if(json.length === 0) {
-            throw new Error(`No secret found at path '${path}'`);
+            throw new Error(`No secret found at path '${queryPath}'`);
         }
-        return json[0].password!;
+
+        const itemData = json[0];
+        let secretValue: string;
+
+        // Get the appropriate field value
+        switch(fieldName.toLowerCase()) {
+            case 'password':
+                secretValue = itemData.password || '';
+                break;
+            case 'username':
+                secretValue = itemData.username || '';
+                break;
+            case 'url':
+                secretValue = itemData.url || '';
+                break;
+            case 'note':
+            case 'notes':
+                secretValue = itemData.note || '';
+                break;
+            default:
+                secretValue = itemData.password || '';
+                break;
+        }
+
+        if (!secretValue) {
+            throw new Error(`No value found for field '${fieldName}' in item '${queryPath}'`);
+        }
+
+        // If there's a JSON key, parse and extract the value
+        if (parsedPath.jsonKey) {
+            return this.returnPossibleJsonValue(secretValue, parsedPath.jsonKey);
+        }
+
+        return secretValue;
     }
 
 } 

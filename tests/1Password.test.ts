@@ -31,6 +31,26 @@ describe('OnePasswordProvider', () => {
         expect(result).toBe('json-test-value');
     });
 
+    it('should retrieve JSON secret with :: syntax', async () => {
+        const result = await provider.getSecret('op://testing/test-json/notes::key');
+        expect(typeof result).toBe('string');
+        expect(result.length).toBeGreaterThan(0);
+        expect(result).toBe('test-json-value');
+    });
+
+    it('should retrieve nested JSON secret with :: syntax', async () => {
+        const result = await provider.getSecret('op://testing/test-json/notes::nested.value');
+        expect(typeof result).toBe('string');
+        expect(result.length).toBeGreaterThan(0);
+        expect(result).toBe('nested-test-value');
+    });
+
+    it('should throw on non-existent JSON key with :: syntax', async () => {
+        await expect(provider.getSecret('op://testing/test-json/notes::nonExistentKey'))
+            .rejects
+            .toThrow(/Key nonExistentKey not found in JSON object/);
+    });
+
     it('should throw on non-existent vault', async () => {
         await expect(provider.getSecret('op://non-existent-vault/item/field'))
             .rejects

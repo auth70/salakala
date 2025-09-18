@@ -17,7 +17,7 @@ describe('GoogleCloudSecretsProvider', () => {
     it('should throw error for invalid path format', async () => {
         await expect(provider.getSecret('invalid-path'))
             .rejects
-            .toThrow('Invalid Google Cloud secret path');
+            .toThrow('Invalid URI: invalid-path');
     });
 
     it('should retrieve entire secret as JSON when no key specified', async () => {
@@ -51,12 +51,12 @@ describe('GoogleCloudSecretsProvider', () => {
     it('should throw on invalid key in key-value secret', async () => {
         await expect(provider.getSecret(`gcsm://projects/${projectId}/secrets/test-json-secret/versions/latest::non-existent-key`))
             .rejects
-            .toThrow(/Key 'non-existent-key' not found in secret/);
+            .toThrow(/Key non-existent-key not found in JSON object/);
     });
 
     it('should handle non-JSON secret with key specified', async () => {
         await expect(provider.getSecret(`gcsm://projects/${projectId}/secrets/test-plain-secret/versions/latest::some-key`))
             .rejects
-            .toThrow('Secret is not a valid JSON object but a key was requested');
+            .toThrow(/Key some-key not found in JSON object/);
     });
 }); 

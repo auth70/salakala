@@ -26,7 +26,7 @@ export abstract class SecretProvider {
             if(key) {
                 // If a key is provided, try to retrieve the value from the JSON object
                 const result = this.getFromObjWithStringPath(json, key);
-                if(result) {
+                if(result !== undefined) {
                     return result.toString();
                 } else {
                     throw new Error(`Key ${key} not found in JSON object`);
@@ -36,7 +36,11 @@ export abstract class SecretProvider {
                 return JSON.stringify(json);
             }
         } catch (e) {
-            // Ignore parsing errors
+            // Re-throw key not found errors, but ignore JSON parsing errors
+            if (e instanceof Error && e.message.includes('Key') && e.message.includes('not found')) {
+                throw e;
+            }
+            // For JSON parsing errors, return the original value
             return value;
         }
     }
