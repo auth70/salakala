@@ -132,6 +132,57 @@ In this example:
 - `DB_PASSWORD` will be fetched from the secret manager
 - `APP_NAME` will be passed through directly to the generated environment variables
 
+## JSON Field Access
+
+salakala supports accessing specific fields within JSON values using the `::jsonKey` syntax.
+
+### Syntax
+
+```text
+provider://path/to/secret::jsonKey
+```
+
+The `::` separator tells salakala to:
+
+1. Fetch the secret value
+2. Parse it as JSON
+3. Extract the specified key/path
+4. Return that value as a string
+
+### Supported Key Patterns
+
+- **Simple key access**: `::username`
+- **Nested object access**: `::database.host` or `::api.credentials.key`  
+- **Array access**: `::servers[0]` or `::endpoints[1].url`
+- **Empty array access**: `::items[]` (gets first item)
+
+### Example
+
+If your secret contains this JSON:
+
+```json
+{
+  "database": {
+    "host": "localhost",
+    "credentials": {
+      "username": "admin", 
+      "password": "secret123"
+    }
+  },
+  "servers": ["web1", "web2", "api"]
+}
+```
+
+You can access specific fields:
+```json
+{
+  "DB_HOST": "op://vault/config/database::database.host",
+  "DB_USER": "op://vault/config/database::database.credentials.username",
+  "DB_PASS": "op://vault/config/database::database.credentials.password",
+  "WEB_SERVER": "op://vault/config/database::servers[0]"
+}
+```
+
 ## Providers
 
 <details>
