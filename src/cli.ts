@@ -5,6 +5,36 @@ import { SecretsManager } from './lib/SecretsManager.js';
 import { program } from '@commander-js/extra-typings';
 import { escapeEnvValue } from './lib/envEscape.js';
 
+/**
+ * Resolves the input file path with smart fallback logic.
+ * If the exact file exists, uses it.
+ * If not found and input doesn't contain extension, tries salakala.{input}.json.
+ * 
+ * @param {string} input - The input file path or name
+ * @returns {string} The resolved file path
+ * @throws {Error} If no valid file is found
+ */
+function resolveInputFile(input: string): string {
+    // If the exact file exists, use it
+    if (existsSync(input)) {
+        return input;
+    }
+
+    // If the input doesn't contain a dot (no extension), try the salakala.{input}.json pattern
+    if (!input.includes('.')) {
+        const salakalatPattern = `salakala.${input}.json`;
+        if (existsSync(salakalatPattern)) {
+            return salakalatPattern;
+        }
+        
+        // Both attempts failed
+        throw new Error(`Configuration file not found. Tried:\n  - ${input}\n  - ${salakalatPattern}`);
+    }
+
+    // Input has extension but file doesn't exist
+    throw new Error(`Configuration file '${input}' not found`);
+}
+
 const PACKAGE_VERSION = '1.0.1';
 
 program
@@ -13,7 +43,7 @@ program
     .version(PACKAGE_VERSION);
 
 program
-    .option('-i, --input <file>', 'input salakala json file path', 'salakala.json')
+    .option('-i, --input <file>', 'input config file path or environment name (e.g., "local" → "salakala.local.json")', 'salakala.json')
     .option('-e, --env <environment>', 'environment to use from input file', 'development')
     .option('-o, --output <file>', 'output file path', '.env')
     .option('-w, --overwrite', 'overwrite the output file instead of merging with existing values')
@@ -30,7 +60,8 @@ program
             }
             
             const manager = new SecretsManager();
-            const secrets = await manager.loadSecrets(options.input, options.env);
+            const resolvedInputFile = resolveInputFile(options.input);
+            const secrets = await manager.loadSecrets(resolvedInputFile, options.env);
 
             if(options.set) {
                 Object.entries(secrets).forEach(([key, value]) => {
