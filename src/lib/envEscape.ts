@@ -18,14 +18,16 @@ export function escapeEnvValue(value: string): string {
     }
 
     // Handle as regular string
-    const needsQuotes = /[\n\r"'\s]/.test(value) || value.startsWith(' ') || value.endsWith(' ');
+    // Quote when value contains whitespace, quotes, equals, comment start, or dollar (potential expansion)
+    const needsQuotes = /[\n\r"'\s=#\$]/.test(value) || value.startsWith(' ') || value.endsWith(' ');
     
     if (needsQuotes) {
         // Escape existing double quotes and wrap in double quotes
         const escaped = value
             .replace(/"/g, '\\"')    // Escape quotes
             .replace(/\n/g, '\\n')   // Escape newlines
-            .replace(/\r/g, '\\r');  // Escape carriage returns
+            .replace(/\r/g, '\\r')   // Escape carriage returns
+            .replace(/\$/g, '\\$');  // Escape dollar to avoid accidental expansion
         return `"${escaped}"`;
     }
     

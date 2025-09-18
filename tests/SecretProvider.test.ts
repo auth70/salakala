@@ -268,6 +268,23 @@ describe('escapeEnvValue', () => {
         expect(escapeEnvValue('value\'with\'quotes')).toBe('"value\'with\'quotes"');
     });
 
+    it('should escape values with equals signs', () => {
+        expect(escapeEnvValue('value=with=equals')).toBe('"value=with=equals"');
+        expect(escapeEnvValue('key=value')).toBe('"key=value"');
+        expect(escapeEnvValue('DATABASE_URL=postgres://user:pass@host/db')).toBe('"DATABASE_URL=postgres://user:pass@host/db"');
+    });
+
+    it('should escape values starting with # (comments)', () => {
+        expect(escapeEnvValue('#comment')).toBe('"#comment"');
+        expect(escapeEnvValue('value#hash')).toBe('"value#hash"');
+    });
+
+    it('should escape values with $ (prevent expansion)', () => {
+        expect(escapeEnvValue('$HOME')).toBe('"\\$HOME"');
+        expect(escapeEnvValue('path:$PATH')).toBe('"path:\\$PATH"');
+        expect(escapeEnvValue('dollar$ign')).toBe('"dollar\\$ign"');
+    });
+
     it('should escape values with newlines', () => {
         expect(escapeEnvValue('value\nwith\nnewlines')).toBe('"value\\nwith\\nnewlines"');
         expect(escapeEnvValue('value\r\nwith\r\nwindows\r\nnewlines')).toBe('"value\\r\\nwith\\r\\nwindows\\r\\nnewlines"');
