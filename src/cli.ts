@@ -5,7 +5,7 @@ import { SecretsManager } from './lib/SecretsManager.js';
 import { program } from '@commander-js/extra-typings';
 import { escapeEnvValue } from './lib/envEscape.js';
 
-const PACKAGE_VERSION = '0.6.0';
+const PACKAGE_VERSION = '0.6.4';
 
 program
     .name('salakala')
