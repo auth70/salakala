@@ -114,4 +114,12 @@ describe('AzureKeyVaultProvider', () => {
             .rejects
             .toThrow(/Key nonExistentKey not found in JSON object/);
     });
+
+    describe('Write operations', () => {
+        it('should throw error for invalid write path format', async () => {
+            await expect(provider.setSecret('invalid-path', 'value'))
+                .rejects
+                .toThrow('Invalid URI: invalid-path');
+        });
+    });
 }); 

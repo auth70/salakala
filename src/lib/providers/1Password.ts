@@ -128,4 +128,76 @@ export class OnePasswordProvider extends SecretProvider {
 
         return value;
     }
+
+    /**
+     * Stores a secret value in 1Password.
+     * Creates a new item if it doesn't exist, or updates an existing field.
+     * 
+     * @param {string} path - The 1Password secret reference path
+     *                        Format: op://vault-name/item-name/[section-name/]field-name
+     *                        Example: op://Development/API Keys/production/access_token
+     * @param {string} value - The secret value to store
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be written
+     */
+    async setSecret(path: string, value: string): Promise<void> {
+        if (!path.startsWith('op://')) {
+            throw new Error('Invalid 1Password secret path');
+        }
+
+        const parsedPath = this.parsePath(path);
+        const pathParts = parsedPath.pathParts;
+
+        if (pathParts.length < 2) {
+            throw new Error('1Password path must include at least vault and item name');
+        }
+
+        const vaultName = pathParts[0];
+        const itemName = pathParts[1];
+        let fieldName: string;
+        let sectionName: string | undefined;
+
+        if (pathParts.length === 2) {
+            throw new Error('1Password path must include a field name');
+        } else if (pathParts.length === 3) {
+            fieldName = pathParts[2];
+        } else {
+            sectionName = pathParts.slice(2, -1).join('.');
+            fieldName = pathParts[pathParts.length - 1];
+        }
+
+        try {
+            const checkCommand = this.sessionToken
+                ? `op item get "${itemName}" --vault="${vaultName}" --session="${this.sessionToken}" --format=json`
+                : `op item get "${itemName}" --vault="${vaultName}" --format=json`;
+
+            const checkResponse = await this.cli.run(checkCommand);
+            
+            if (checkResponse.state === 'ok') {
+                const fieldPath = sectionName ? `${sectionName}.${fieldName}` : fieldName;
+                const editCommand = this.sessionToken
+                    ? `op item edit "${itemName}" --vault="${vaultName}" "${fieldPath}=${value}" --session="${this.sessionToken}"`
+                    : `op item edit "${itemName}" --vault="${vaultName}" "${fieldPath}=${value}"`;
+
+                const editResponse = await this.cli.run(editCommand);
+                if (editResponse.state !== 'ok') {
+                    throw new Error(editResponse.error?.message || editResponse.message || 'Failed to update 1Password item');
+                }
+            } else {
+                const createCommand = this.sessionToken
+                    ? `op item create --category=login --title="${itemName}" --vault="${vaultName}" "${fieldName}[password]=${value}" --session="${this.sessionToken}"`
+                    : `op item create --category=login --title="${itemName}" --vault="${vaultName}" "${fieldName}[password]=${value}"`;
+
+                const createResponse = await this.cli.run(createCommand);
+                if (createResponse.state !== 'ok') {
+                    throw new Error(createResponse.error?.message || createResponse.message || 'Failed to create 1Password item');
+                }
+            }
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to write 1Password secret: ${error.message}`);
+            }
+            throw new Error('Failed to write 1Password secret: Unknown error');
+        }
+    }
 }

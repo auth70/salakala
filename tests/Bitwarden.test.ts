@@ -70,4 +70,36 @@ describe('BitwardenProvider', () => {
         expect(result).toBe('bar');
     });
 
+    describe('Write operations', () => {
+        it('should write a new item to Bitwarden', async () => {
+            const itemName = `test-write-item-${Date.now()}`;
+            const testValue = `test-value-${Date.now()}`;
+            
+            await provider.setSecret(`bw://test-folder/${itemName}/password`, testValue);
+            
+            const retrievedValue = await provider.getSecret(`bw://test-folder/${itemName}/password`);
+            expect(retrievedValue).toBe(testValue);
+        }, 15000);
+
+        it('should update an existing item', async () => {
+            const itemName = `test-update-item-${Date.now()}`;
+            const initialValue = `initial-${Date.now()}`;
+            const updatedValue = `updated-${Date.now()}`;
+            
+            await provider.setSecret(`bw://test-folder/${itemName}/password`, initialValue);
+            const firstRead = await provider.getSecret(`bw://test-folder/${itemName}/password`);
+            expect(firstRead).toBe(initialValue);
+            
+            await provider.setSecret(`bw://test-folder/${itemName}/password`, updatedValue);
+            const secondRead = await provider.getSecret(`bw://test-folder/${itemName}/password`);
+            expect(secondRead).toBe(updatedValue);
+        }, 30000);
+
+        it('should throw error for invalid path', async () => {
+            await expect(provider.setSecret('invalid-path', 'value'))
+                .rejects
+                .toThrow('Invalid URI: invalid-path');
+        });
+    });
+
 }, 30000); 

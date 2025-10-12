@@ -140,4 +140,115 @@ export class KeePassProvider extends SecretProvider {
 
         return value;
     }
+
+    /**
+     * Stores a secret value in KeePass.
+     * Creates a new entry if it doesn't exist, or updates an existing attribute.
+     * 
+     * Note: KeePassXC CLI has limited non-interactive editing support.
+     * This implementation requires interactive password entry for the database.
+     * 
+     * @param {string} path - The KeePass secret reference path
+     *                        Format: kp://path/to/database.kdbx/entry-path/attribute
+     *                        Example: kp:///Users/me/secrets.kdbx/Web/GitHub/Password
+     * @param {string} value - The secret value to store
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be written
+     */
+    async setSecret(path: string, value: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        if (parsedPath.pathParts.length < 3) {
+            throw new Error('KeePass path must include database path, entry path, and attribute');
+        }
+
+        const dbPath = parsedPath.pathParts[0];
+        const entryName = parsedPath.pathParts.slice(1, -1).join('/');
+        const attribute = parsedPath.pathParts[parsedPath.pathParts.length - 1];
+
+        try {
+            // Check if entry exists
+            const showResponse = await this.cli.run(
+                `keepassxc-cli show "${dbPath}" "${entryName}"`,
+                {
+                    interactive: true,
+                    passwordPrompt: 'Enter password to unlock',
+                    env: process.env.KEEPASS_PASSWORD ? { KEEPASS_PASSWORD: process.env.KEEPASS_PASSWORD } : {}
+                }
+            );
+            const entryExists = showResponse.state === 'ok';
+
+            if (entryExists) {
+                // Update existing entry
+                console.log(`📝 Updating KeePass entry ${entryName}, attribute ${attribute}...`);
+                console.log('⚠️  KeePassXC CLI requires interactive password entry for editing');
+                
+                // Use edit-password for Password attribute
+                if (attribute === 'Password') {
+                    const editResponse = await this.cli.run(
+                        `keepassxc-cli edit-password "${dbPath}" "${entryName}"`,
+                        {
+                            interactive: true,
+                            passwordPrompt: 'Enter password to unlock',
+                            password: value
+                        }
+                    );
+                    
+                    if (editResponse.state !== 'ok') {
+                        throw new Error(editResponse.message || 'Failed to update password');
+                    }
+                } else {
+                    // For other attributes, we need to use set command
+                    const editResponse = await this.cli.run(
+                        `keepassxc-cli set "${dbPath}" "${entryName}" "${attribute}" "${value}"`,
+                        {
+                            interactive: true,
+                            passwordPrompt: 'Enter password to unlock'
+                        }
+                    );
+                    
+                    if (editResponse.state !== 'ok') {
+                        throw new Error(editResponse.message || `Failed to update attribute ${attribute}`);
+                    }
+                }
+            } else {
+                // Create new entry
+                console.log(`🆕 Creating KeePass entry ${entryName}...`);
+                console.log('⚠️  KeePassXC CLI requires interactive password entry for adding entries');
+                
+                const addResponse = await this.cli.run(
+                    `keepassxc-cli add "${dbPath}" "${entryName}"`,
+                    {
+                        interactive: true,
+                        passwordPrompt: 'Enter password to unlock',
+                        password: attribute === 'Password' ? value : undefined
+                    }
+                );
+                
+                if (addResponse.state !== 'ok') {
+                    throw new Error(addResponse.message || 'Failed to create entry');
+                }
+                
+                // If attribute is not Password, set it separately
+                if (attribute !== 'Password') {
+                    const setResponse = await this.cli.run(
+                        `keepassxc-cli set "${dbPath}" "${entryName}" "${attribute}" "${value}"`,
+                        {
+                            interactive: true,
+                            passwordPrompt: 'Enter password to unlock'
+                        }
+                    );
+                    
+                    if (setResponse.state !== 'ok') {
+                        throw new Error(setResponse.message || `Failed to set attribute ${attribute}`);
+                    }
+                }
+            }
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to write KeePass secret: ${error.message}`);
+            }
+            throw new Error('Failed to write KeePass secret: Unknown error');
+        }
+    }
 }

@@ -19,6 +19,15 @@ export class SecretsManager {
      * Each prefix (e.g., 'op://', 'awssm://') is mapped to its provider implementation.
      */
     private providers: Map<string, SecretProvider>;
+
+    /**
+     * Gets the providers map for use in sync operations.
+     * 
+     * @returns {Map<string, SecretProvider>} The providers map
+     */
+    getProviders(): Map<string, SecretProvider> {
+        return this.providers;
+    }
     
     /**
      * Initializes a new SecretsManager with all supported secret providers.
@@ -72,13 +81,18 @@ export class SecretsManager {
         const isFlatConfig = Object.values(config).every(value => typeof value === 'string');
         
         // Get the appropriate config based on structure
-        const secretsConfig: SecretConfig = isFlatConfig 
+        let rawConfig: any = isFlatConfig 
             ? config 
             : (config[environment] || null);
 
-        if (!isFlatConfig && !secretsConfig) {
+        if (!isFlatConfig && !rawConfig) {
             throw new Error(`Environment '${environment}' not found in config file. Available environments: ${Object.keys(config).join(', ')}`);
         }
+
+        // Check if this is a src/dst config and extract src
+        const secretsConfig: SecretConfig = (rawConfig && typeof rawConfig === 'object' && 'src' in rawConfig && 'dst' in rawConfig)
+            ? rawConfig.src
+            : rawConfig;
 
         // Group secrets by provider prefix
         const secretsByProvider = new Map<string, Map<string, string>>();

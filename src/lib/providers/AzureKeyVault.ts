@@ -143,4 +143,46 @@ export class AzureKeyVaultProvider extends SecretProvider {
         
         return false;
     }
+
+    /**
+     * Stores a secret value in Azure Key Vault.
+     * Creates a new secret if it doesn't exist, or updates if it does.
+     * Azure SDK handles both cases automatically.
+     * 
+     * @param {string} path - The Azure Key Vault secret reference path
+     *                        Format: azurekv://vault-name.vault.azure.net/secret-name
+     *                        Example: azurekv://my-vault.vault.azure.net/api-key
+     * @param {string} value - The secret value to store
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be written
+     */
+    async setSecret(path: string, value: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
+        if (!pathMatch) {
+            throw new Error('Invalid Azure Key Vault path format. Expected: azurekv://vault-name.vault.azure.net/secret-name');
+        }
+
+        const [, vaultUrl, secretName] = pathMatch;
+        const fullVaultUrl = `https://${vaultUrl}`;
+        const client = this.getClient(fullVaultUrl);
+
+        try {
+            console.log(`📝 Setting secret ${secretName} in Azure Key Vault...`);
+            await client.setSecret(secretName, value);
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                const errorMessage = error.message.toLowerCase();
+                if (errorMessage.includes('authentication failed') || 
+                    errorMessage.includes('unauthorized') || 
+                    errorMessage.includes('forbidden') ||
+                    errorMessage.includes('credentials')) {
+                    throw new Error(`Failed to write Azure Key Vault secret: Authentication error. ${error.message}`);
+                }
+                throw new Error(`Failed to write Azure Key Vault secret: ${error.message}`);
+            }
+            throw new Error('Failed to write Azure Key Vault secret: Unknown error');
+        }
+    }
 } 

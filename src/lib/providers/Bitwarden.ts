@@ -226,4 +226,140 @@ export class BitwardenProvider extends SecretProvider {
         return this.folders;
     }
 
+    /**
+     * Stores a secret value in Bitwarden.
+     * Creates a new item if it doesn't exist, or updates an existing field.
+     * 
+     * @param {string} path - The Bitwarden secret reference path
+     *                        Format: bw://[folder]/item-name/field
+     *                        Example: bw://my-folder/api-creds/password
+     * @param {string} value - The secret value to store
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be written
+     */
+    async setSecret(path: string, value: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        if (parsedPath.pathParts.length < 2) {
+            throw new Error('Bitwarden path must include at least item name and field');
+        }
+
+        await this.getItems(); // Ensure we have items loaded
+        
+        let itemPath = '';
+        let fieldName = '';
+        
+        if (parsedPath.pathParts.length === 2) {
+            itemPath = parsedPath.pathParts[0];
+            fieldName = parsedPath.pathParts[1];
+        } else {
+            itemPath = parsedPath.pathParts.slice(0, -1).join('/');
+            fieldName = parsedPath.pathParts[parsedPath.pathParts.length - 1];
+        }
+
+        const item = this.items.find((item) => item.id === itemPath || item.path === itemPath);
+
+        try {
+            if (item) {
+                // Update existing item
+                console.log(`📝 Updating Bitwarden item ${itemPath}, field ${fieldName}...`);
+                
+                // Get full item data
+                const getResponse = await this.cli.run(`bw get item ${item.id} --session="${this.sessionKey}"`);
+                if (getResponse.state !== 'ok') {
+                    throw new Error('Failed to get item for editing');
+                }
+                
+                const itemData = JSON.parse(getResponse.stdout);
+                
+                // Update the appropriate field
+                if (fieldName === 'password' && itemData.login) {
+                    itemData.login.password = value;
+                } else if (fieldName === 'username' && itemData.login) {
+                    itemData.login.username = value;
+                } else if (fieldName === 'notes') {
+                    itemData.notes = value;
+                } else {
+                    // Update or create custom field
+                    if (!itemData.fields) {
+                        itemData.fields = [];
+                    }
+                    const field = itemData.fields.find((f: any) => f.name === fieldName);
+                    if (field) {
+                        field.value = value;
+                    } else {
+                        itemData.fields.push({
+                            name: fieldName,
+                            value: value,
+                            type: 0 // text field
+                        });
+                    }
+                }
+                
+                // Encode and update
+                const itemJson = JSON.stringify(itemData);
+                const encoded = Buffer.from(itemJson).toString('base64');
+                const editResponse = await this.cli.run(`bw edit item ${item.id} ${encoded} --session="${this.sessionKey}"`);
+                
+                if (editResponse.state !== 'ok') {
+                    throw new Error(editResponse.message || 'Failed to update item');
+                }
+                
+                // Clear cache
+                this.items = [];
+            } else {
+                // Create new item
+                console.log(`🆕 Creating Bitwarden item ${itemPath}...`);
+                
+                const newItem: any = {
+                    type: 1, // login type
+                    name: parsedPath.pathParts[parsedPath.pathParts.length - 2] || parsedPath.pathParts[0],
+                    login: {},
+                    notes: null,
+                    fields: []
+                };
+                
+                // Set folder if applicable
+                if (parsedPath.pathParts.length > 2) {
+                    const folderName = parsedPath.pathParts[0];
+                    const folder = this.folders.find((f) => f.name === folderName);
+                    if (folder && folder.id) {
+                        newItem.folderId = folder.id;
+                    }
+                }
+                
+                // Set the field value
+                if (fieldName === 'password') {
+                    newItem.login.password = value;
+                } else if (fieldName === 'username') {
+                    newItem.login.username = value;
+                } else if (fieldName === 'notes') {
+                    newItem.notes = value;
+                } else {
+                    newItem.fields.push({
+                        name: fieldName,
+                        value: value,
+                        type: 0
+                    });
+                }
+                
+                const itemJson = JSON.stringify(newItem);
+                const encoded = Buffer.from(itemJson).toString('base64');
+                const createResponse = await this.cli.run(`bw create item ${encoded} --session="${this.sessionKey}"`);
+                
+                if (createResponse.state !== 'ok') {
+                    throw new Error(createResponse.message || 'Failed to create item');
+                }
+                
+                // Clear cache
+                this.items = [];
+            }
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to write Bitwarden secret: ${error.message}`);
+            }
+            throw new Error('Failed to write Bitwarden secret: Unknown error');
+        }
+    }
+
 }

@@ -200,4 +200,96 @@ test-folder/test [id: 6754388171590937865]
         return secretValue;
     }
 
+    /**
+     * Stores a secret value in LastPass.
+     * Creates a new entry if it doesn't exist, or updates an existing field.
+     * 
+     * @param {string} path - The LastPass secret reference path
+     *                        Format: lp://folder/item-name/field
+     *                        Example: lp://work/api-credentials/password
+     * @param {string} value - The secret value to store
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be written
+     */
+    async setSecret(path: string, value: string): Promise<void> {
+        await this.checkLogin();
+        
+        const parsedPath = this.parsePath(path);
+        
+        if (parsedPath.pathParts.length < 2) {
+            throw new Error('LastPass path must include at least item name and field');
+        }
+
+        const itemName = parsedPath.pathParts.slice(0, -1).join('/');
+        const fieldName = parsedPath.pathParts[parsedPath.pathParts.length - 1];
+
+        try {
+            // Check if item exists
+            const showResponse = await this.cli.run(`lpass show "${itemName}" --json`);
+            const itemExists = showResponse.state === 'ok';
+
+            if (itemExists) {
+                // Update existing item
+                console.log(`📝 Updating LastPass item ${itemName}, field ${fieldName}...`);
+                
+                // LastPass CLI doesn't have a direct field update, so we need to use edit with field specification
+                if (fieldName === 'password') {
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --password="${value}" "${itemName}"`);
+                    if (editResponse.state !== 'ok') {
+                        throw new Error(editResponse.message || 'Failed to update password');
+                    }
+                } else if (fieldName === 'username') {
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --username="${value}" "${itemName}"`);
+                    if (editResponse.state !== 'ok') {
+                        throw new Error(editResponse.message || 'Failed to update username');
+                    }
+                } else if (fieldName === 'url') {
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --url="${value}" "${itemName}"`);
+                    if (editResponse.state !== 'ok') {
+                        throw new Error(editResponse.message || 'Failed to update URL');
+                    }
+                } else if (fieldName === 'note' || fieldName === 'notes') {
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --notes="${value}" "${itemName}"`);
+                    if (editResponse.state !== 'ok') {
+                        throw new Error(editResponse.message || 'Failed to update notes');
+                    }
+                } else {
+                    // For custom fields, we need to use --field
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --field="${fieldName}:${value}" "${itemName}"`);
+                    if (editResponse.state !== 'ok') {
+                        throw new Error(editResponse.message || `Failed to update field ${fieldName}`);
+                    }
+                }
+            } else {
+                // Create new item
+                console.log(`🆕 Creating LastPass item ${itemName}...`);
+                
+                // Build the add command based on field type
+                let addCommand = `lpass add --non-interactive "${itemName}"`;
+                
+                if (fieldName === 'password') {
+                    addCommand += ` --password="${value}"`;
+                } else if (fieldName === 'username') {
+                    addCommand += ` --username="${value}"`;
+                } else if (fieldName === 'url') {
+                    addCommand += ` --url="${value}"`;
+                } else if (fieldName === 'note' || fieldName === 'notes') {
+                    addCommand += ` --notes="${value}"`;
+                } else {
+                    addCommand += ` --field="${fieldName}:${value}"`;
+                }
+                
+                const addResponse = await this.cli.run(addCommand);
+                if (addResponse.state !== 'ok') {
+                    throw new Error(addResponse.message || 'Failed to create item');
+                }
+            }
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to write LastPass secret: ${error.message}`);
+            }
+            throw new Error('Failed to write LastPass secret: Unknown error');
+        }
+    }
+
 } 

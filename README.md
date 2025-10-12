@@ -132,6 +132,64 @@ In this example:
 - `DB_PASSWORD` will be fetched from the secret manager
 - `APP_NAME` will be passed through directly to the generated environment variables
 
+## Syncing Secrets Between Providers
+
+salakala can copy secrets from one provider to another.
+
+### Config Format
+
+Add `src` and `dst` to your config:
+
+```json
+{
+  "production": {
+    "src": {
+      "API_KEY": "op://vault/api-key/password",
+      "DATABASE_URL": "op://vault/database/connection-string"
+    },
+    "dst": {
+      "API_KEY": [
+        "gcsm://projects/my-project/secrets/api-key/versions/latest"
+      ],
+      "DATABASE_URL": [
+        "gcsm://projects/my-project/secrets/db-url/versions/latest",
+        "awssm://us-east-1/prod/database-url"
+      ]
+    }
+  }
+}
+```
+
+- `src` defines where to read secrets from (works for `.env` generation too)
+- `dst` defines where to write secrets (array supports multiple destinations)
+- Secrets not listed in `dst` won't be synced
+
+### Usage
+
+```bash
+# Sync all secrets defined in dst
+salakala sync
+
+# Sync for a specific environment
+salakala sync -e production
+
+# Sync only one secret
+salakala sync -s API_KEY
+
+# Dry run to see what would be synced
+salakala sync --dry-run
+
+# Skip prompts and overwrite conflicts
+salakala sync -y
+```
+
+When a secret already exists at the destination, you'll be prompted with:
+- **Y** - Overwrite this secret
+- **N** - Skip this secret  
+- **D** - Show diff (compare current vs new value)
+- **A** - Overwrite all remaining conflicts
+- **Q** - Quit
+
 ## JSON Field Access
 
 salakala supports accessing specific fields within JSON values using the `::jsonKey` syntax.
@@ -195,6 +253,7 @@ Requires the 1Password CLI (`op`) to be present.
 - ✅ Tested in CI
 - 🧑‍💻 Interactive login via invoking `op`
 - 🤖 Noninteractive login using environment variables
+- 📝 Write support (for syncing)
 
 **Format:**
 
@@ -220,6 +279,7 @@ Requires the Bitwarden CLI (`bw`) to be present. Supports different vault locati
 - ✅ Tested in CI
 - 🧑‍💻 Interactive login via invoking `bw`
 - 🤖 Noninteractive login using environment variables
+- 📝 Write support (for syncing)
 
 **Format:**
 ```
@@ -260,6 +320,7 @@ Requires the KeePassXC CLI (`keepassxc-cli`) to be present.
 - ✅ Tested in CI
 - 🧑‍💻 Interactive login via invoking `keepassxc-cli`
 - 🤖 Noninteractive login using environment variables
+- 📝 Write support (requires interactive mode)
 
 **Format:**
 ```
@@ -285,6 +346,7 @@ kp:///Users/me/secrets.kdbx/Web/GitHub/Password
 Fetches secrets from AWS Secrets Manager. Requires some form of AWS credentials to be configured e.g. by installing the AWS CLI and running `aws configure`. Uses the AWS SDK to fetch secrets (the `aws` CLI is not required).
 
 - ✅ Tested in CI
+- 📝 Write support (for syncing)
 
 **Format:**
 ```
@@ -320,6 +382,7 @@ awssm://us-east-1/prod/database::password
 Fetches secrets from Google Cloud Secret Manager. Requires Google Cloud credentials to be configured, e.g. by installing the Google Cloud CLI and running `gcloud auth login`. Uses the Google Cloud SDK to fetch secrets (the `gcloud` CLI is not required).
 
 - ✅ Tested against a real Google Cloud project in CI
+- 📝 Write support (for syncing)
 
 **Format:**
 ```
@@ -354,6 +417,7 @@ gcsm://projects/my-project/secrets/database/versions/latest::password
 Fetches secrets from Azure Key Vault. Requires Azure credentials to be configured. Uses the Azure SDK to fetch secrets.
 
 ❌ Needs testing
+- 📝 Write support (for syncing)
 
 **Format:**
 ```
@@ -363,6 +427,31 @@ azurekv://vault-name.vault.azure.net/secret-name
 **Example:**
 ```
 azurekv://my-vault.vault.azure.net/database-password
+```
+
+<hr>
+</details>
+
+<details>
+<summary><b>LastPass <code>(lp://)</code></b></summary>
+
+<hr>
+
+Requires the LastPass CLI (`lpass`) to be present.
+
+- ✅ Tested in CI
+- 🧑‍💻 Interactive login via invoking `lpass`
+- 🤖 Noninteractive login using environment variables
+- 📝 Write support (for syncing)
+
+**Format:**
+```
+lp://folder/item-name/field
+```
+
+**Example:**
+```
+lp://work-secrets/api-credentials/password
 ```
 
 <hr>

@@ -68,4 +68,39 @@ describe('OnePasswordProvider', () => {
             .rejects
             .toThrow(/Failed to read 1Password secret/);
     });
+
+    describe('Write operations', () => {
+        it('should write a secret to 1Password', async () => {
+            const testValue = `test-value-${Date.now()}`;
+            await provider.setSecret('op://testing/test-write-item/password', testValue);
+            
+            const retrievedValue = await provider.getSecret('op://testing/test-write-item/password');
+            expect(retrievedValue).toBe(testValue);
+        });
+
+        it('should update an existing secret', async () => {
+            const initialValue = `initial-${Date.now()}`;
+            const updatedValue = `updated-${Date.now()}`;
+            
+            await provider.setSecret('op://testing/test-update-item/password', initialValue);
+            const firstRead = await provider.getSecret('op://testing/test-update-item/password');
+            expect(firstRead).toBe(initialValue);
+            
+            await provider.setSecret('op://testing/test-update-item/password', updatedValue);
+            const secondRead = await provider.getSecret('op://testing/test-update-item/password');
+            expect(secondRead).toBe(updatedValue);
+        }, 15000);
+
+        it('should throw error for invalid write path', async () => {
+            await expect(provider.setSecret('invalid-path', 'value'))
+                .rejects
+                .toThrow('Invalid 1Password secret path');
+        });
+
+        it('should throw error for path without field name', async () => {
+            await expect(provider.setSecret('op://testing/item', 'value'))
+                .rejects
+                .toThrow('1Password path must include a field name');
+        });
+    });
 }); 

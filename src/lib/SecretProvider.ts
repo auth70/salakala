@@ -14,6 +14,27 @@ export abstract class SecretProvider {
      */
     abstract getSecret(path: string): Promise<string>;
     /**
+     * Stores a secret value in the provider's storage.
+     * Creates a new secret if it doesn't exist, or updates/adds a version if it does.
+     * 
+     * @param {string} path - The provider-specific path or identifier for the secret
+     * @param {string} value - The secret value to store
+     * @returns {Promise<void>}
+     * @throws {Error} If the secret cannot be written or the path is invalid
+     */
+    abstract setSecret(path: string, value: string): Promise<void>;
+    /**
+     * Deletes a secret from the provider's storage.
+     * Optional method - not all providers may implement this.
+     * 
+     * @param {string} path - The provider-specific path or identifier for the secret
+     * @returns {Promise<void>}
+     * @throws {Error} If the secret cannot be deleted or the path is invalid
+     */
+    async deleteSecret(path: string): Promise<void> {
+        throw new Error(`Delete operation not implemented for this provider`);
+    }
+    /**
      * Tries to parse a value as a JSON object and return the value of the given key.
      * @param {string} value - The value to parse as a JSON object
      * @param {string} key - The key to return the value of

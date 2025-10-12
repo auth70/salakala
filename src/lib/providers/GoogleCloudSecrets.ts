@@ -147,4 +147,73 @@ Authentication failed. Please authenticate with Google Cloud:
         
         return false;
     }
+
+    /**
+     * Stores a secret value in Google Cloud Secret Manager.
+     * Creates a new secret if it doesn't exist, or adds a new version if it does.
+     * 
+     * @param {string} path - The Google Cloud secret reference path
+     *                        Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION
+     *                        Example: gcsm://projects/my-project/secrets/api-key/versions/latest
+     *                        Note: VERSION is ignored for writes; a new version is always created
+     * @param {string} value - The secret value to store
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be written
+     */
+    async setSecret(path: string, value: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        const pathMatch = parsedPath.path.match(/^projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/(.+)$/);
+        if (!pathMatch) {
+            throw new Error('Invalid Google Cloud secret path format. Expected: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION');
+        }
+
+        const [, projectId, secretId] = pathMatch;
+        const parent = `projects/${projectId}`;
+        const secretName = `projects/${projectId}/secrets/${secretId}`;
+
+        try {
+            // Try to create the secret - if it already exists, we'll catch that error
+            try {
+                console.log(`🆕 Creating secret ${secretId}...`);
+                await this.client.createSecret({
+                    parent: parent,
+                    secretId: secretId,
+                    secret: {
+                        replication: {
+                            automatic: {},
+                        },
+                    },
+                });
+            } catch (error: any) {
+                // Error code 6 = ALREADY_EXISTS - that's fine, we'll just add a version
+                if (error.code === 6) {
+                    console.log(`📦 Secret ${secretId} already exists, adding new version...`);
+                } else {
+                    // Any other error should be thrown
+                    throw error;
+                }
+            }
+
+            // Add a new version to the secret (whether we just created it or it already existed)
+            await this.client.addSecretVersion({
+                parent: secretName,
+                payload: {
+                    data: Buffer.from(value, 'utf8'),
+                },
+            });
+
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                const errorMessage = error.message.toLowerCase();
+                if (errorMessage.includes('permission denied') || 
+                    errorMessage.includes('unauthenticated') || 
+                    errorMessage.includes('unauthorized')) {
+                    throw new Error(`Failed to write Google Cloud secret: Authentication error. ${error.message}`);
+                }
+                throw new Error(`Failed to write Google Cloud secret: ${error.message}`);
+            }
+            throw new Error('Failed to write Google Cloud secret: Unknown error');
+        }
+    }
 }

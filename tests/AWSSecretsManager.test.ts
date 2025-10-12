@@ -55,4 +55,36 @@ describe('AWSSecretsManagerProvider', () => {
             .rejects
             .toThrow(/Key some-key not found in JSON object/);
     });
+
+    describe('Write operations', () => {
+        it('should write a new secret to AWS', async () => {
+            const secretId = `test/test-write-secret-${Date.now()}`;
+            const testValue = `test-value-${Date.now()}`;
+            
+            await provider.setSecret(`awssm://${region}/${secretId}`, testValue);
+            
+            const retrievedValue = await provider.getSecret(`awssm://${region}/${secretId}`);
+            expect(retrievedValue).toBe(testValue);
+        }, 15000);
+
+        it('should update an existing secret', async () => {
+            const secretId = `test/test-update-secret-${Date.now()}`;
+            const initialValue = `initial-${Date.now()}`;
+            const updatedValue = `updated-${Date.now()}`;
+            
+            await provider.setSecret(`awssm://${region}/${secretId}`, initialValue);
+            const firstRead = await provider.getSecret(`awssm://${region}/${secretId}`);
+            expect(firstRead).toBe(initialValue);
+            
+            await provider.setSecret(`awssm://${region}/${secretId}`, updatedValue);
+            const secondRead = await provider.getSecret(`awssm://${region}/${secretId}`);
+            expect(secondRead).toBe(updatedValue);
+        }, 15000);
+
+        it('should throw error for invalid write path format', async () => {
+            await expect(provider.setSecret('invalid-path', 'value'))
+                .rejects
+                .toThrow('Invalid URI: invalid-path');
+        });
+    });
 });

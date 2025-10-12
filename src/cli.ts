@@ -2,6 +2,7 @@
 
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { SecretsManager } from './lib/SecretsManager.js';
+import { SyncManager } from './lib/SyncManager.js';
 import { program } from '@commander-js/extra-typings';
 import { escapeEnvValue } from './lib/envEscape.js';
 import inquirer from 'inquirer';
@@ -83,7 +84,7 @@ async function promptForEnvironment(environments: string[]): Promise<string> {
     return selectedEnvironment;
 }
 
-const PACKAGE_VERSION = '1.1.0';
+const PACKAGE_VERSION = '1.2.0';
 
 program
     .name('salakala')
@@ -162,6 +163,67 @@ program
                 const mode = options.overwrite ? 'overwrote' : 'updated';
                 console.log(`💾 Successfully ${mode} ${options.output} using '${environment}' environment 🔒🐟`);
                 console.log(`${'-'.repeat(padding)}`);
+            }
+        } catch (error) {
+            console.error('Error:', error instanceof Error ? error.message : String(error));
+            process.exit(1);
+        }
+    });
+
+program
+    .command('sync')
+    .description('Synchronize secrets from source to destination provider(s)')
+    .option('-i, --input <file>', 'input config file path', 'salakala.json')
+    .option('-e, --env <environment>', 'environment to use from input file')
+    .option('-s, --secret <name>', 'sync only this specific secret')
+    .option('--dry-run', 'show what would be synced without actually syncing')
+    .option('-y, --yes', 'skip all prompts and overwrite conflicts automatically')
+    .action(async (options) => {
+        try {
+            const manager = new SecretsManager();
+            const resolvedInputFile = resolveInputFile(options.input);
+            
+            const syncManager = new SyncManager(manager.getProviders());
+            const syncConfig = syncManager.loadSyncConfig(resolvedInputFile, options.env);
+
+            if (!syncConfig) {
+                console.error('Error: No sync configuration found in the config file.');
+                console.error('Sync configurations must have both "src" and "dst" keys.');
+                console.error('\nExample:');
+                console.error(JSON.stringify({
+                    "production": {
+                        "src": {
+                            "API_KEY": "op://vault/item/field"
+                        },
+                        "dst": {
+                            "API_KEY": ["gcsm://projects/my-project/secrets/api-key/versions/latest"]
+                        }
+                    }
+                }, null, 2));
+                process.exit(1);
+            }
+
+            console.log('🔄 Starting sync operation...');
+            if (options.dryRun) {
+                console.log('🔍 DRY RUN MODE - No changes will be made');
+            }
+            if (options.secret) {
+                console.log(`📌 Syncing only: ${options.secret}`);
+            }
+            console.log('');
+
+            const results = await syncManager.sync(
+                syncConfig,
+                options.secret,
+                options.dryRun,
+                options.yes
+            );
+
+            syncManager.printSummary(results);
+
+            const hasFailures = results.some(r => !r.success);
+            if (hasFailures) {
+                process.exit(1);
             }
         } catch (error) {
             console.error('Error:', error instanceof Error ? error.message : String(error));

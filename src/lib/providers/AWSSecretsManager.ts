@@ -1,5 +1,5 @@
 import { SecretProvider } from '../SecretProvider.js';
-import { SecretsManager } from '@aws-sdk/client-secrets-manager';
+import { SecretsManager, CreateSecretCommand, PutSecretValueCommand, ResourceExistsException } from '@aws-sdk/client-secrets-manager';
 import { execSync } from 'child_process';
 
 /**
@@ -140,5 +140,61 @@ export class AWSSecretsManagerProvider extends SecretProvider {
         }
         
         return false;
+    }
+
+    /**
+     * Stores a secret value in AWS Secrets Manager.
+     * Creates a new secret if it doesn't exist, or updates if it does.
+     * 
+     * @param {string} path - The AWS Secrets Manager reference path
+     *                        Format: awssm://region/secret-name
+     *                        Example: awssm://us-east-1/prod/api-key
+     * @param {string} value - The secret value to store
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be written
+     */
+    async setSecret(path: string, value: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
+        if (!pathMatch) {
+            throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name');
+        }
+
+        const [, region, secretId] = pathMatch;
+        const client = this.getClient(region);
+
+        try {
+            // Try to create the secret first
+            try {
+                console.log(`🆕 Creating secret ${secretId}...`);
+                await client.send(new CreateSecretCommand({
+                    Name: secretId,
+                    SecretString: value
+                }));
+            } catch (error: any) {
+                // If secret already exists, update it instead
+                if (error.name === 'ResourceExistsException' || error instanceof ResourceExistsException) {
+                    console.log(`📦 Secret ${secretId} already exists, updating...`);
+                    await client.send(new PutSecretValueCommand({
+                        SecretId: secretId,
+                        SecretString: value
+                    }));
+                } else {
+                    throw error;
+                }
+            }
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                const errorMessage = error.message.toLowerCase();
+                if (errorMessage.includes('credentials') || 
+                    errorMessage.includes('authentication') || 
+                    errorMessage.includes('access denied')) {
+                    throw new Error(`Failed to write AWS secret: Authentication error. ${error.message}`);
+                }
+                throw new Error(`Failed to write AWS secret: ${error.message}`);
+            }
+            throw new Error('Failed to write AWS secret: Unknown error');
+        }
     }
 }

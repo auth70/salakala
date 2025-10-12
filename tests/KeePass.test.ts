@@ -62,4 +62,18 @@ describe('KeePassProvider', () => {
             .rejects
             .toThrow(/Key nonExistentKey not found in JSON object/);
     });
+
+    describe('Write operations', () => {
+        it('should throw error for invalid path format', async () => {
+            await expect(provider.setSecret('invalid-path', 'value'))
+                .rejects
+                .toThrow('Invalid URI: invalid-path');
+        });
+
+        it('should throw error for path with too few parts', async () => {
+            await expect(provider.setSecret('kp://db.kdbx/entry', 'value'))
+                .rejects
+                .toThrow('KeePass path must include database path, entry path, and attribute');
+        });
+    });
 }); 
