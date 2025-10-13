@@ -1,4 +1,4 @@
-# salakala 🔒🐟
+# salakala
 
 <p>
   <a href="https://github.com/auth70/salakala/actions"><img src="https://img.shields.io/github/actions/workflow/status/auth70/salakala/publish.yml?logo=github" alt="build"></a>
@@ -6,20 +6,16 @@
   <a href="https://www.npmjs.com/package/salakala"><img src="https://img.shields.io/npm/types/salakala" alt="npm type definitions"></a>
 </p>
 
-We've all been there, sharing `.env` files in Slack to get an application working quickly while feeling bad about security practices. 🫠
-
-But teams always have a shared secret or password manager, and you already have a way to access it through a CLI or service account, right?
-
-What if you just had a nice little JSON file in your code repository that defined which environment variables to fetch from any manager through URIs?
+Manage environment variables from multiple secret providers. Define secret references in a JSON configuration file and generate `.env` files or export variables directly to your shell.
 
 ```json
-// salakala.json
 {
-    "DATABASE_URL": "op://application-secrets/db/url"
+    "DATABASE_URL": "op://application-secrets/db/url",
+    "API_KEY": "awssm://us-east-1/prod/api-key"
 }
 ```
 
-salakala does exactly that! It wraps around your manager and generates environment variables for you as `.env` files or by setting variables directly in your environment.
+Integrates with 1Password, Bitwarden, AWS Secrets Manager, Google Cloud Secret Manager, Azure Key Vault, KeePass, and LastPass.
 
 ## Installation
 
@@ -45,100 +41,140 @@ and then add a script to your `package.json`:
 
 ## Usage
 
-1. Create a `salakala.json` file in your project (safe to commit to your repository!)
-2. Run salakala to generate your `.env` file or set environment variables:
+Create a `salakala.json` configuration file in your project root, then run salakala to fetch secrets and generate environment variables.
+
+### Basic Commands
 
 ```bash
-# Generate .env file in the current directory (default)
-salakala
-
-# Set environment variables in the current shell
-salakala -s
-
-# Specify an environment
-salakala -e staging
-
-# Specify a different input file
-salakala -i some-config.json
-
-# Specify a different output file
-salakala -o .env.local
-
-# Overwrite existing file instead of merging
-salakala -w
-
-# Show help
-salakala --help
+salakala                    # Generate .env file in current directory
+salakala -s                 # Export variables to current shell
+salakala -e staging         # Use specific environment configuration
+salakala -i config.json     # Use alternative input file
+salakala -o .env.local      # Write to alternative output file
+salakala -w                 # Overwrite existing file instead of merging
+salakala --help             # Show help
 ```
 
-### Examples
+### Configuration
 
-#### Flat structure (no environment specific secrets)
+<details>
+<summary><b>Basic Configuration</b></summary>
+
+Flat structure for single-environment setups:
 
 ```json
-// salakala.json
 {
-    "SECRET_ENV_VALUE": "op://application-secrets/test/test-section"
+    "DATABASE_URL": "op://vault/database/url",
+    "API_KEY": "awssm://us-east-1/prod/api-key"
 }
 ```
+</details>
 
-#### Nested structure (environment specific secrets)
+<details>
+<summary><b>Multi-Environment Configuration</b></summary>
+
+Nested structure for environment-specific secrets:
 
 ```json
-// salakala.json
 {
     "development": {
-        "SECRET_ENV_VALUE": "op://application-secrets/test/test-section"
+        "DATABASE_URL": "op://vault/dev-database/url",
+        "API_KEY": "awssm://us-east-1/dev/api-key"
     },
-    "staging": {
-        "SECRET_ENV_VALUE": "op://application-secrets/staging/test-section"
+    "production": {
+        "DATABASE_URL": "op://vault/prod-database/url",
+        "API_KEY": "awssm://us-east-1/prod/api-key"
     }
 }
 ```
+</details>
 
-#### Using environment variables in secret paths
+<details>
+<summary><b>Environment Variable Substitution</b></summary>
 
-You can use environment variables in your secret paths using `${VARIABLE_NAME}` syntax:
+Use `${VARIABLE_NAME}` syntax to reference environment variables in secret paths:
 
 ```json
-// salakala.json
 {
     "development": {
-        "GCP_API_KEY": "gcsm://projects/${PROJECT_ID}/secrets/api-key/versions/latest"
+        "API_KEY": "gcsm://projects/${PROJECT_ID}/secrets/api-key/versions/latest"
     }
 }
 ```
 
-The environment variables must of course be set before running:
+Ensure variables are set before execution:
 
 ```bash
 PROJECT_ID=my-project salakala
 ```
+</details>
 
-#### Using non-secret values
+<details>
+<summary><b>Non-Secret Values</b></summary>
 
-You can also include regular, non-secret values. Any value that doesn't start with a provider prefix (like `op://`, `gcsm://`, etc.) will be passed through:
+Include static configuration alongside secrets. Values without provider prefixes are passed through unchanged:
 
 ```json
 {
-    "development": {
-        "DB_PASSWORD": "op://vault/database/password",
-        "APP_NAME": "My Development App",
+    "DB_PASSWORD": "op://vault/database/password",
+    "APP_NAME": "My Application",
+    "LOG_LEVEL": "info"
+}
+```
+</details>
+
+<details>
+<summary><b>JSON Field Access</b></summary>
+
+Extract specific fields from JSON-structured secrets using the `::` separator.
+
+**Syntax:**
+```
+provider://path/to/secret::jsonKey
+```
+
+The `::` separator instructs salakala to fetch the secret, parse it as JSON, extract the specified field, and return it as a string.
+
+**Supported patterns:**
+- Simple key: `::username`
+- Nested object: `::database.host` or `::api.credentials.key`
+- Array index: `::servers[0]` or `::endpoints[1].url`
+- First array item: `::items[]`
+
+**Example:**
+
+Given a secret containing:
+
+```json
+{
+  "database": {
+    "host": "localhost",
+    "credentials": {
+      "username": "admin", 
+      "password": "secret123"
     }
+  },
+  "servers": ["web1", "web2", "api"]
 }
 ```
 
-In this example:
-- `DB_PASSWORD` will be fetched from the secret manager
-- `APP_NAME` will be passed through directly to the generated environment variables
+Extract specific fields:
 
-## Syncing Secrets Between Providers
+```json
+{
+  "DB_HOST": "op://vault/config::database.host",
+  "DB_USER": "op://vault/config::database.credentials.username",
+  "DB_PASS": "op://vault/config::database.credentials.password",
+  "WEB_SERVER": "op://vault/config::servers[0]"
+}
+```
+</details>
 
-salakala can copy secrets from one provider to another.
+## Secret Synchronization
 
-### Config Format
+Synchronize secrets across multiple providers using `src` and `dst` configuration.
 
-Add `src` and `dst` to your config:
+### Configuration
 
 ```json
 {
@@ -160,318 +196,256 @@ Add `src` and `dst` to your config:
 }
 ```
 
-- `src` defines where to read secrets from (works for `.env` generation too)
-- `dst` defines where to write secrets (array supports multiple destinations)
-- Secrets not listed in `dst` won't be synced
+- `src`: Source provider URIs for reading secrets
+- `dst`: Destination provider URIs for writing secrets (supports multiple destinations per secret)
+- Only secrets defined in `dst` will be synchronized
 
-### Usage
+### Commands
 
 ```bash
-# Sync all secrets defined in dst
-salakala sync
-
-# Sync for a specific environment
-salakala sync -e production
-
-# Sync only one secret
-salakala sync -s API_KEY
-
-# Dry run to see what would be synced
-salakala sync --dry-run
-
-# Skip prompts and overwrite conflicts
-salakala sync -y
+salakala sync                # Sync all secrets in dst
+salakala sync -e production  # Sync specific environment
+salakala sync -s API_KEY     # Sync single secret
+salakala sync --dry-run      # Preview changes without writing
+salakala sync -y             # Skip prompts and overwrite (for CI/automation)
 ```
 
-When a secret already exists at the destination, you'll be prompted with:
+### Conflict Resolution
+
+When a secret exists at the destination, you will be prompted unless using the `-y` flag:
+
 - **Y** - Overwrite this secret
 - **N** - Skip this secret  
-- **D** - Show diff (compare current vs new value)
+- **D** - Show diff between current and new value
 - **A** - Overwrite all remaining conflicts
-- **Q** - Quit
+- **Q** - Quit synchronization
 
-## JSON Field Access
-
-salakala supports accessing specific fields within JSON values using the `::jsonKey` syntax.
-
-### Syntax
-
-```text
-provider://path/to/secret::jsonKey
-```
-
-The `::` separator tells salakala to:
-
-1. Fetch the secret value
-2. Parse it as JSON
-3. Extract the specified key/path
-4. Return that value as a string
-
-### Supported Key Patterns
-
-- **Simple key access**: `::username`
-- **Nested object access**: `::database.host` or `::api.credentials.key`  
-- **Array access**: `::servers[0]` or `::endpoints[1].url`
-- **Empty array access**: `::items[]` (gets first item)
-
-### Example
-
-If your secret contains this JSON:
-
-```json
-{
-  "database": {
-    "host": "localhost",
-    "credentials": {
-      "username": "admin", 
-      "password": "secret123"
-    }
-  },
-  "servers": ["web1", "web2", "api"]
-}
-```
-
-You can access specific fields:
-```json
-{
-  "DB_HOST": "op://vault/config/database::database.host",
-  "DB_USER": "op://vault/config/database::database.credentials.username",
-  "DB_PASS": "op://vault/config/database::database.credentials.password",
-  "WEB_SERVER": "op://vault/config/database::servers[0]"
-}
-```
+Use `salakala sync -y` in CI/CD pipelines to automatically overwrite without prompts.
 
 ## Providers
 
 <details>
-<summary><b>1Password <code>(op://)</code></b></summary>
+<summary><b>1Password</b> <code>op://</code></summary>
 
-<hr>
+**Requirements:** 1Password CLI (`op`)
 
-Requires the 1Password CLI (`op`) to be present.
-
-- ✅ Tested in CI
-- 🧑‍💻 Interactive login via invoking `op`
-- 🤖 Noninteractive login using environment variables
-- 📝 Write support (for syncing)
+**Features:**
+- Tested in CI
+- Interactive login
+- Non-interactive login via environment variables
+- Write support
+- JSON field access
 
 **Format:**
-
 ```
-op://vault-name/item-name/[section-name/]field-name
+op://vault-name/item-name/[section-name/]field-name[::jsonKey]
 ```
 
 **Example:**
 ```
 op://Personal/AWS/access-key
+op://Development/config/database::host
 ```
-<hr>
 
 </details>
 
 <details>
-<summary><b>Bitwarden Password Manager <code>(bw://)</code></b></summary>
+<summary><b>Bitwarden</b> <code>bw://</code></summary>
 
-<hr>
+**Requirements:** Bitwarden CLI (`bw`)
 
-Requires the Bitwarden CLI (`bw`) to be present. Supports different vault locations.
-
-- ✅ Tested in CI
-- 🧑‍💻 Interactive login via invoking `bw`
-- 🤖 Noninteractive login using environment variables
-- 📝 Write support (for syncing)
+**Features:**
+- Tested in CI
+- Interactive login
+- Non-interactive login via environment variables
+- Write support
 
 **Format:**
 ```
-bw://[folder]/item-name-or-id/field::json-key
+bw://[folder]/item-name-or-id/field[::json-key]
 ```
 
-**Example: Plaintext field via item ID:**
+**Examples:**
+
+Access by item ID:
 ```
 bw://1c9448b3-3d30-4f01-8d3c-3a4b8d14d00a/password
 ```
 
-**Example: Plaintext field via item name:**
+Access by item name and folder:
 ```
 bw://my-folder/my-item/password
 ```
 
-**Example: JSON field via item name:**
+Access JSON field in notes:
 ```
 bw://my-folder/my-item/notes::foo.bar[1]
 ```
-<small><i>This expects that the item has a `notes` field that is a JSON object. It will return the value of the `foo.bar[1]` key.</i></small>
 
-**Example: URI from a login item:**
+Access login URIs:
 ```
 bw://my-folder/my-item/uris/0
 ```
-<small><i>This would get the first URI from the `uris` field.</i></small>
-<hr>
+
 </details>
 
 <details>
-<summary><b>KeePassXC <code>(kp://)</code></b></summary>
+<summary><b>KeePassXC</b> <code>kp://</code></summary>
 
-<hr>
+**Requirements:** KeePassXC CLI (`keepassxc-cli`)
 
-Requires the KeePassXC CLI (`keepassxc-cli`) to be present.
-
-- ✅ Tested in CI
-- 🧑‍💻 Interactive login via invoking `keepassxc-cli`
-- 🤖 Noninteractive login using environment variables
-- 📝 Write support (requires interactive mode)
+**Features:**
+- Tested in CI
+- Interactive login
+- Non-interactive login via environment variables
+- Write support (interactive mode only)
+- JSON field access
 
 **Format:**
 ```
-kp://path/to/database.kdbx/entry-path/field
+kp://path/to/database.kdbx/entry-path/field[::jsonKey]
 ```
 
 **Example:**
 ```
 kp:///Users/me/secrets.kdbx/Web/GitHub/Password
+kp:///Users/me/secrets.kdbx/Config/Notes::database.host
 ```
 
-**Notes:**
-- To find field titles, you can use the `keepassxc-cli` command: `keepassxc-cli show "/path/to/database.kdbx" "entry-name"`
+**Note:** Use `keepassxc-cli show "/path/to/database.kdbx" "entry-name"` to list available fields.
 
-<hr>
 </details>
 
 <details>
-<summary><b>AWS Secrets Manager <code>(awssm://)</code></b></summary>
+<summary><b>AWS Secrets Manager</b> <code>awssm://</code></summary>
 
-<hr>
+**Requirements:** AWS credentials (AWS CLI or environment variables)
 
-Fetches secrets from AWS Secrets Manager. Requires some form of AWS credentials to be configured e.g. by installing the AWS CLI and running `aws configure`. Uses the AWS SDK to fetch secrets (the `aws` CLI is not required).
-
-- ✅ Tested in CI
-- 📝 Write support (for syncing)
+**Features:**
+- Tested in CI
+- Write support
+- Uses AWS SDK (AWS CLI not required)
 
 **Format:**
 ```
 awssm://region/secret-name[::jsonKey]
 ```
 
-**Example: Plaintext secret:**
+**Examples:**
+
+Plaintext secret:
 ```
 awssm://us-east-1/prod/api-key
 ```
 
-**Example: JSON object:**
+Entire JSON object:
 ```
 awssm://us-east-1/prod/database
 ```
-<small><i>This will fetch the entire JSON object in the `database` secret and pass it through as a JSON string.</i></small>
 
-**Example: Specific key in JSON object:**
+Specific JSON field:
 ```
 awssm://us-east-1/prod/database::password
 ```
-<small><i>This will fetch the `password` key from the JSON object in the `database` secret.</i></small>
-
-<hr>
 
 </details>
 
 <details>
-<summary><b>Google Cloud Secret Manager <code>(gcsm://)</code></b></summary>
+<summary><b>Google Cloud Secret Manager</b> <code>gcsm://</code></summary>
 
-<hr>
+**Requirements:** Google Cloud credentials (gcloud CLI or service account)
 
-Fetches secrets from Google Cloud Secret Manager. Requires Google Cloud credentials to be configured, e.g. by installing the Google Cloud CLI and running `gcloud auth login`. Uses the Google Cloud SDK to fetch secrets (the `gcloud` CLI is not required).
-
-- ✅ Tested against a real Google Cloud project in CI
-- 📝 Write support (for syncing)
+**Features:**
+- Tested in CI
+- Write support
+- Uses Google Cloud SDK (gcloud CLI not required)
 
 **Format:**
 ```
 gcsm://projects/project-id/secrets/secret-id/versions/version[::jsonKey]
 ```
 
-**Example: Plaintext secret:**
+**Examples:**
+
+Plaintext secret:
 ```
 gcsm://projects/my-project/secrets/api-key/versions/latest
 ```
 
-**Example: JSON object:**
+Entire JSON object:
 ```
 gcsm://projects/my-project/secrets/database/versions/latest
 ```
-<small><i>This will fetch the entire JSON object in the `database` secret and pass it through as a JSON string.</i></small>
 
-**Example: Specific key in JSON object:**
+Specific JSON field:
 ```
 gcsm://projects/my-project/secrets/database/versions/latest::password
 ```
-<small><i>This will fetch the `password` key from the JSON object in the `database` secret.</i></small>
 
-<hr>
 </details>
 
 <details>
-<summary><b>Azure Key Vault <code>(azurekv://)</code></b></summary>
+<summary><b>Azure Key Vault</b> <code>azurekv://</code></summary>
 
-<hr>
+**Requirements:** Azure credentials
 
-Fetches secrets from Azure Key Vault. Requires Azure credentials to be configured. Uses the Azure SDK to fetch secrets.
-
-❌ Needs testing
-- 📝 Write support (for syncing)
+**Features:**
+- Needs testing
+- Write support
+- Uses Azure SDK
+- JSON field access
 
 **Format:**
 ```
-azurekv://vault-name.vault.azure.net/secret-name
+azurekv://vault-name.vault.azure.net/secret-name[::jsonKey]
 ```
 
 **Example:**
 ```
 azurekv://my-vault.vault.azure.net/database-password
+azurekv://my-vault.vault.azure.net/config::database.host
 ```
 
-<hr>
 </details>
 
 <details>
-<summary><b>LastPass <code>(lp://)</code></b></summary>
+<summary><b>LastPass</b> <code>lp://</code></summary>
 
-<hr>
+**Requirements:** LastPass CLI (`lpass`)
 
-Requires the LastPass CLI (`lpass`) to be present.
-
-- ✅ Tested in CI
-- 🧑‍💻 Interactive login via invoking `lpass`
-- 🤖 Noninteractive login using environment variables
-- 📝 Write support (for syncing)
+**Features:**
+- Tested in CI
+- Interactive login
+- Non-interactive login via environment variables
+- Write support
+- JSON field access
 
 **Format:**
 ```
-lp://folder/item-name/field
+lp://folder/item-name/field[::jsonKey]
 ```
 
 **Example:**
 ```
 lp://work-secrets/api-credentials/password
+lp://work-secrets/config/notes::database.host
 ```
 
-<hr>
 </details>
 
-If you want to add a new provider, you can do so by extending the `SecretProvider` class and adding it to the `providers` map in `src/lib/SecretsManager.ts`. Please submit a PR and make tests for it!
+### Adding New Providers
 
-## Recommendations
+Extend the `SecretProvider` class and add it to the providers map in `src/lib/SecretsManager.ts`. Contributions with tests are welcome.
 
-- ✅ DO commit `salakala.json` - it should only contain paths to secrets, not the secrets themselves
-- ❌ DON'T commit generated `.env` files
-- Add `.env*` to your `.gitignore`
+## Best Practices
 
-## Thanks to
+- Commit `salakala.json` to version control (contains only secret references, not secrets)
+- Do not commit generated `.env` files
+- Add `.env*` to `.gitignore`
 
-- [1Password](https://1password.com) for sponsoring a team license used for testing.
+## Acknowledgments
 
-## Contributing
-
-Contributions are welcome! Feel free to submit issues and pull requests.
+Thank you [1Password](https://1password.com) for sponsoring a team license used for testing.
 
 ## License
 
