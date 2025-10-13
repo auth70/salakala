@@ -4,6 +4,7 @@ import { OnePasswordProvider } from '../src/lib/providers/1Password.js';
 import { GoogleCloudSecretsProvider } from '../src/lib/providers/GoogleCloudSecrets.js';
 import { SecretProvider } from '../src/lib/SecretProvider.js';
 import { writeFileSync, unlinkSync } from 'fs';
+import { generateTestId } from './test-utils.js';
 
 describe('SyncManager', () => {
     let syncManager: SyncManager;
@@ -103,8 +104,7 @@ describe('SyncManager', () => {
 
     describe('Sync operations', () => {
         it('should sync a single secret from 1Password to Google Cloud', async () => {
-            const timestamp = Date.now();
-            const secretId = `test-sync-single-${timestamp}`;
+            const secretId = generateTestId('test-sync-single');
             createdSecrets.push(secretId);
             
             const syncConfig = {
@@ -128,9 +128,9 @@ describe('SyncManager', () => {
         }, 15000);
 
         it('should sync to multiple destinations', async () => {
-            const timestamp = Date.now();
-            const secretId1 = `test-sync-multi-1-${timestamp}`;
-            const secretId2 = `test-sync-multi-2-${timestamp}`;
+            const baseId = generateTestId('test-sync-multi');
+            const secretId1 = `${baseId}-1`;
+            const secretId2 = `${baseId}-2`;
             createdSecrets.push(secretId1, secretId2);
             
             const syncConfig = {
@@ -159,8 +159,7 @@ describe('SyncManager', () => {
         }, 15000);
 
         it('should handle dry run mode', async () => {
-            const timestamp = Date.now();
-            const secretId = `test-sync-dry-run-${timestamp}`;
+            const secretId = generateTestId('test-sync-dry-run');
             
             const syncConfig = {
                 src: {
@@ -183,9 +182,9 @@ describe('SyncManager', () => {
         });
 
         it('should sync only specific secret when specified', async () => {
-            const timestamp = Date.now();
-            const secretId1 = `test-sync-specific-1-${timestamp}`;
-            const secretId2 = `test-sync-specific-2-${timestamp}`;
+            const baseId = generateTestId('test-sync-specific');
+            const secretId1 = `${baseId}-1`;
+            const secretId2 = `${baseId}-2`;
             createdSecrets.push(secretId1);
             // Note: secretId2 is not created, so we don't add it to cleanup
             

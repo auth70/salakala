@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { OnePasswordProvider } from '../src/lib/providers/1Password.js';
 import { parseEnvContent } from '../src/lib/ImportUtils.js';
 import { testEnvContent, expectedParsedValues, simpleTestVars, jsonTestVars, standardJsonData, complexJsonData, nestedJsonData } from './fixtures/import-test-data.js';
+import { generateTestId } from './test-utils.js';
 
 describe('OnePasswordProvider', () => {
     let provider: OnePasswordProvider;
@@ -12,22 +13,27 @@ describe('OnePasswordProvider', () => {
             throw new Error('OP_SERVICE_ACCOUNT_TOKEN environment variable must be set');
         }
         provider = new OnePasswordProvider();
-        // Rate limit: wait between tests to avoid 1Password API throttling
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Rate limit: wait between tests to avoid 1Password API throttling and ensure cleanup is complete
+        await new Promise(resolve => setTimeout(resolve, 3000));
     });
 
     afterEach(async () => {
+        const hadItems = createdItems.length > 0;
         for (const itemPath of createdItems) {
             try {
                 await provider.deleteSecret(itemPath);
                 // Delay between deletions to avoid rate limiting and 409 conflicts
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 2000));
             } catch (error) {
                 console.error('Error deleting 1Password item', error);
                 // Ignore errors during cleanup
             }
         }
         createdItems.length = 0;
+        // Additional delay after cleanup to ensure 1Password processes deletions
+        if (hadItems) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
     });
 
     it('should throw error for invalid path format', async () => {
@@ -37,8 +43,7 @@ describe('OnePasswordProvider', () => {
     });
 
     it('should retrieve JSON secret with :: syntax', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-json-syntax-${timestamp}`;
+        const itemName = generateTestId('test-json-syntax');
         const path = `op://testing/${itemName}/notes`;
         createdItems.push(path);
         
@@ -51,8 +56,7 @@ describe('OnePasswordProvider', () => {
     }, 15000);
 
     it('should retrieve nested JSON secret with :: syntax', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-nested-json-${timestamp}`;
+        const itemName = generateTestId('test-nested-json');
         const path = `op://testing/${itemName}/notes`;
         createdItems.push(path);
         
@@ -65,8 +69,7 @@ describe('OnePasswordProvider', () => {
     }, 15000);
 
     it('should throw on non-existent JSON key with :: syntax', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-missing-key-${timestamp}`;
+        const itemName = generateTestId('test-missing-key');
         const path = `op://testing/${itemName}/notes`;
         createdItems.push(path);
         
@@ -90,8 +93,8 @@ describe('OnePasswordProvider', () => {
     });
 
     it('should throw on non-existent field', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-missing-field-${timestamp}`;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const itemName = generateTestId('test-missing-field');
         const path = `op://testing/${itemName}/password`;
         createdItems.push(path);
         
@@ -104,10 +107,9 @@ describe('OnePasswordProvider', () => {
 
     describe('Write operations', () => {
         it('should update an existing secret', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-update-item-${timestamp}`;
-            const initialValue = `initial-${timestamp}`;
-            const updatedValue = `updated-${timestamp}`;
+            const itemName = generateTestId('test-update-item');
+            const initialValue = `initial-${Date.now()}`;
+            const updatedValue = `updated-${Date.now()}`;
             createdItems.push(`op://testing/${itemName}/password`);
             
             await provider.setSecret(`op://testing/${itemName}/password`, initialValue);
@@ -135,9 +137,8 @@ describe('OnePasswordProvider', () => {
         });
 
         it('should delete a secret', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-delete-item-${timestamp}`;
-            const testValue = `value-to-delete-${timestamp}`;
+            const itemName = generateTestId('test-delete-item');
+            const testValue = `value-to-delete-${Date.now()}`;
             
             await provider.setSecret(`op://testing/${itemName}/password`, testValue);
             
@@ -180,8 +181,7 @@ describe('OnePasswordProvider', () => {
 
     describe('Import integration: JSON bundle storage', () => {
         it('should debug what gets stored and retrieved', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-debug-json-${timestamp}`;
+            const itemName = generateTestId('test-debug-json');
             
             // Simple test data
             const testData = {
@@ -220,8 +220,7 @@ describe('OnePasswordProvider', () => {
         }, 20000);
 
         it('should store and retrieve env vars as JSON bundle', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-json-${timestamp}`;
+            const itemName = generateTestId('test-import-json');
             
             // Parse test env content
             const envVars = parseEnvContent(testEnvContent);
@@ -252,8 +251,8 @@ describe('OnePasswordProvider', () => {
         }, 20000);
 
         it('should retrieve specific fields from JSON bundle using :: syntax', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-json-field-${timestamp}`;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const itemName = generateTestId('test-import-json-field');
             
             const envVars = parseEnvContent(testEnvContent);
             const jsonBundle = JSON.stringify(envVars);
@@ -279,8 +278,7 @@ describe('OnePasswordProvider', () => {
         }, 20000);
 
         it('should handle JSON inside JSON bundle', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-nested-json-${timestamp}`;
+            const itemName = generateTestId('test-import-nested-json');
             
             const jsonBundle = JSON.stringify(nestedJsonData);
             const bundlePath = provider.buildPath(
@@ -304,8 +302,8 @@ describe('OnePasswordProvider', () => {
 
     describe('Import integration: Individual fields storage', () => {
         it('should store and retrieve multiple fields in one item', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-fields-${timestamp}`;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const itemName = generateTestId('test-import-fields');
             
             const testVars = simpleTestVars;
             
@@ -319,6 +317,7 @@ describe('OnePasswordProvider', () => {
                     createdItems.push(`op://testing/${itemName}/password`); // For cleanup
                 }
                 await provider.setSecret(path, value);
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
             
             // Retrieve and verify each field
@@ -333,8 +332,8 @@ describe('OnePasswordProvider', () => {
         }, 20000);
 
         it('should store fields with sections', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-sections-${timestamp}`;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const itemName = generateTestId('test-import-sections');
             
             const testVars = simpleTestVars;
             
@@ -348,6 +347,7 @@ describe('OnePasswordProvider', () => {
                     createdItems.push(`op://testing/${itemName}/password`);
                 }
                 await provider.setSecret(path, value);
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
             
             // Retrieve and verify
@@ -362,8 +362,8 @@ describe('OnePasswordProvider', () => {
         }, 20000);
 
         it('should store JSON values as individual fields', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-json-fields-${timestamp}`;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const itemName = generateTestId('test-import-json-fields');
             
             const testVars = jsonTestVars;
             
@@ -377,6 +377,7 @@ describe('OnePasswordProvider', () => {
                     createdItems.push(`op://testing/${itemName}/password`);
                 }
                 await provider.setSecret(path, value);
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
             
             // Retrieve and verify JSON is still valid

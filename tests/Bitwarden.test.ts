@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi, afterEach } 
 import { BitwardenProvider } from '../src/lib/providers/Bitwarden.js';
 import { parseEnvContent } from '../src/lib/ImportUtils.js';
 import { simpleTestVars, jsonTestVars, standardJsonData, complexJsonData } from './fixtures/import-test-data.js';
+import { generateTestId } from './test-utils.js';
 
 describe('BitwardenProvider', () => {
     if (!process.env.BW_CLIENTID || !process.env.BW_CLIENTSECRET || !process.env.BW_PASSWORD) {
@@ -29,8 +30,7 @@ describe('BitwardenProvider', () => {
     });
 
     it('should retrieve a json notes field by key', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-json-key-${timestamp}`;
+        const itemName = generateTestId('test-json-key');
         const path = `bw://${itemName}/notes`;
         createdItems.push(path);
         
@@ -41,8 +41,7 @@ describe('BitwardenProvider', () => {
     }, 60000);
 
     it('should retrieve a json notes field by complex key', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-complex-key-${timestamp}`;
+        const itemName = generateTestId('test-complex-key');
         const path = `bw://${itemName}/notes`;
         createdItems.push(path);
         
@@ -53,8 +52,7 @@ describe('BitwardenProvider', () => {
     }, 60000);
 
     it('should retrieve custom field by name', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-custom-field-${timestamp}`;
+        const itemName = generateTestId('test-custom-field');
         const testValue = 'test-secret-value';
         const path = `bw://${itemName}/test-field`;
         createdItems.push(path);
@@ -94,7 +92,7 @@ describe('BitwardenProvider', () => {
 
     describe('Write operations', () => {
         it('should update an existing item', async () => {
-            const itemName = `test-update-item-${Date.now()}`;
+            const itemName = generateTestId('test-update-item');
             const initialValue = `initial-${Date.now()}`;
             const updatedValue = `updated-${Date.now()}`;
             createdItems.push(`bw://test-folder/${itemName}/password`);
@@ -115,7 +113,7 @@ describe('BitwardenProvider', () => {
         });
 
         it('should delete an item', async () => {
-            const itemName = `test-delete-item-${Date.now()}`;
+            const itemName = generateTestId('test-delete-item');
             const testValue = 'value-to-delete';
             
             await provider.setSecret(`bw://test-folder/${itemName}/password`, testValue);
@@ -155,8 +153,7 @@ describe('BitwardenProvider', () => {
 
     describe('Import integration: JSON bundle storage', () => {
         it('should store and retrieve env vars as JSON bundle', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-json-${timestamp}`;
+            const itemName = generateTestId('test-import-json');
             
             const testVars = { ...simpleTestVars, ...jsonTestVars };
             const jsonBundle = JSON.stringify(testVars);
@@ -183,8 +180,7 @@ describe('BitwardenProvider', () => {
         }, 60000);
 
         it('should retrieve specific fields from JSON bundle using :: syntax', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-json-field-${timestamp}`;
+            const itemName = generateTestId('test-import-json-field');
             
             const testVars = simpleTestVars;
             const jsonBundle = JSON.stringify(testVars);
@@ -208,8 +204,7 @@ describe('BitwardenProvider', () => {
 
     describe('Import integration: Individual fields storage', () => {
         it('should store and retrieve multiple fields in one item', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-fields-${timestamp}`;
+            const itemName = generateTestId('test-import-fields');
             
             const testVars = simpleTestVars;
             
@@ -237,8 +232,7 @@ describe('BitwardenProvider', () => {
         }, 60000);
 
         it('should store fields without folder', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-import-no-folder-${timestamp}`;
+            const itemName = generateTestId('test-import-no-folder');
             
             const testVars = simpleTestVars;
             

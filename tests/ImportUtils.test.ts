@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseEnvContent, truncateValueForDisplay, generateConfig, validatePathComponents } from '../src/lib/ImportUtils.js';
+import { generateTestId } from './test-utils.js';
 
 describe('parseEnvContent', () => {
     it('should parse simple KEY=VALUE pairs', () => {
@@ -412,8 +413,8 @@ describe('End-to-end: Parse, Store as JSON Bundle, Retrieve', () => {
         
         const provider = new OnePasswordProvider();
         const manager = new SecretsManager();
-        const timestamp = Date.now();
-        const configPath = `test-import-e2e-${timestamp}.json`;
+        const testId = generateTestId('test-import-e2e');
+        const configPath = `${testId}.json`;
         
         // Step 1: Parse .env content with various complex values
         const envContent = `# Test config
@@ -435,7 +436,7 @@ URL_PARAMS=https://example.com?foo=bar&baz=qux`;
         expect(jsonConfig.api.endpoint).toBe('https://api.example.com/v1');
         
         // Step 2: Store as JSON bundle in 1Password
-        const itemName = `test-import-bundle-${timestamp}`;
+        const itemName = generateTestId('test-import-bundle');
         const jsonBundle = JSON.stringify(envVars);
         const bundlePath = `op://testing/${itemName}/config`;
         

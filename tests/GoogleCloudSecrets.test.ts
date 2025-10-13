@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { GoogleCloudSecretsProvider } from '../src/lib/providers/GoogleCloudSecrets.js';
 import { parseEnvContent } from '../src/lib/ImportUtils.js';
 import { testEnvContent, expectedParsedValues, simpleTestVars, jsonTestVars, keyValueJsonData, nestedJsonData } from './fixtures/import-test-data.js';
+import { generateTestId } from './test-utils.js';
 
 describe('GoogleCloudSecretsProvider', () => {
     let provider: GoogleCloudSecretsProvider;
@@ -35,8 +36,7 @@ describe('GoogleCloudSecretsProvider', () => {
     });
 
     it('should retrieve entire secret as JSON when no key specified', async () => {
-        const timestamp = Date.now();
-        const secretId = `test-json-secret-${timestamp}`;
+        const secretId = generateTestId('test-json-secret');
         createdSecrets.push(secretId);
         
         const path = `gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`;
@@ -51,8 +51,7 @@ describe('GoogleCloudSecretsProvider', () => {
     }, 15000);
 
     it('should retrieve specific key from secret', async () => {
-        const timestamp = Date.now();
-        const secretId = `test-key-access-${timestamp}`;
+        const secretId = generateTestId('test-key-access');
         createdSecrets.push(secretId);
         
         const path = `gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`;
@@ -71,8 +70,7 @@ describe('GoogleCloudSecretsProvider', () => {
     });
 
     it('should throw on invalid key in key-value secret', async () => {
-        const timestamp = Date.now();
-        const secretId = `test-invalid-key-${timestamp}`;
+        const secretId = generateTestId('test-invalid-key');
         createdSecrets.push(secretId);
         
         const path = `gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`;
@@ -84,8 +82,7 @@ describe('GoogleCloudSecretsProvider', () => {
     }, 15000);
 
     it('should return original value when accessing non-JSON secret with key', async () => {
-        const timestamp = Date.now();
-        const secretId = `test-nonjson-key-${timestamp}`;
+        const secretId = generateTestId('test-nonjson-key');
         createdSecrets.push(secretId);
         
         const path = `gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`;
@@ -98,7 +95,7 @@ describe('GoogleCloudSecretsProvider', () => {
 
     describe('Write operations', () => {
         it('should add a new version to existing secret', async () => {
-            const secretId = `test-update-secret-${Date.now()}`;
+            const secretId = generateTestId('test-update-secret');
             const initialValue = `initial-${Date.now()}`;
             const updatedValue = `updated-${Date.now()}`;
             createdSecrets.push(secretId);
@@ -132,7 +129,7 @@ describe('GoogleCloudSecretsProvider', () => {
         });
 
         it('should handle JSON content in secret', async () => {
-            const secretId = `test-json-write-${Date.now()}`;
+            const secretId = generateTestId('test-json-write');
             const jsonValue = JSON.stringify({ key: 'value', nested: { data: 'test' } });
             createdSecrets.push(secretId);
             
@@ -147,7 +144,7 @@ describe('GoogleCloudSecretsProvider', () => {
         }, 15000);
 
         it('should delete a secret', async () => {
-            const secretId = `test-delete-secret-${Date.now()}`;
+            const secretId = generateTestId('test-delete-secret');
             const testValue = 'value-to-delete';
             
             await provider.setSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`, testValue);
@@ -189,8 +186,7 @@ describe('GoogleCloudSecretsProvider', () => {
 
     describe('Import integration: JSON bundle storage', () => {
         it('should store and retrieve env vars as JSON bundle', async () => {
-            const timestamp = Date.now();
-            const secretId = `test-import-json-${timestamp}`;
+            const secretId = generateTestId('test-import-json');
             createdSecrets.push(secretId);
             
             // Parse test env content
@@ -222,8 +218,7 @@ describe('GoogleCloudSecretsProvider', () => {
         }, 20000);
 
         it('should retrieve specific fields from JSON bundle using :: syntax', async () => {
-            const timestamp = Date.now();
-            const secretId = `test-import-json-field-${timestamp}`;
+            const secretId = generateTestId('test-import-json-field');
             createdSecrets.push(secretId);
             
             const envVars = parseEnvContent(testEnvContent);
@@ -249,8 +244,7 @@ describe('GoogleCloudSecretsProvider', () => {
         }, 20000);
 
         it('should handle JSON inside JSON bundle', async () => {
-            const timestamp = Date.now();
-            const secretId = `test-import-nested-json-${timestamp}`;
+            const secretId = generateTestId('test-import-nested-json');
             createdSecrets.push(secretId);
             
             const jsonBundle = JSON.stringify(nestedJsonData);
@@ -274,14 +268,14 @@ describe('GoogleCloudSecretsProvider', () => {
 
     describe('Import integration: Individual secrets storage', () => {
         it('should store and retrieve multiple separate secrets', async () => {
-            const timestamp = Date.now();
+            const baseId = generateTestId('test-import');
             const secretIds: string[] = [];
             
             const testVars = simpleTestVars;
             
             // Store each var as a separate secret
             for (const [key, value] of Object.entries(testVars)) {
-                const secretId = `test-import-${key.toLowerCase()}-${timestamp}`;
+                const secretId = `${baseId}-${key.toLowerCase()}`;
                 secretIds.push(secretId);
                 createdSecrets.push(secretId);
                 
@@ -306,14 +300,14 @@ describe('GoogleCloudSecretsProvider', () => {
         }, 20000);
 
         it('should store JSON values as individual secrets', async () => {
-            const timestamp = Date.now();
+            const baseId = generateTestId('test-import-json');
             const secretIds: string[] = [];
             
             const testVars = jsonTestVars;
             
             // Store JSON values as separate secrets
             for (const [key, value] of Object.entries(testVars)) {
-                const secretId = `test-import-json-${key.toLowerCase()}-${timestamp}`;
+                const secretId = `${baseId}-${key.toLowerCase()}`;
                 secretIds.push(secretId);
                 createdSecrets.push(secretId);
                 

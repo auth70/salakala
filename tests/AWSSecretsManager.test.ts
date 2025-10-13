@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { AWSSecretsManagerProvider } from '../src/lib/providers/AWSSecretsManager.js';
 import { parseEnvContent } from '../src/lib/ImportUtils.js';
 import { testEnvContent, expectedParsedValues, simpleTestVars, jsonTestVars, keyValueJsonData, nestedJsonData } from './fixtures/import-test-data.js';
+import { generateTestId } from './test-utils.js';
 
 describe('AWSSecretsManagerProvider', () => {
     let provider: AWSSecretsManagerProvider;
@@ -32,8 +33,7 @@ describe('AWSSecretsManagerProvider', () => {
     });
 
     it('should retrieve entire secret as JSON when no key specified', async () => {
-        const timestamp = Date.now();
-        const secretId = `test/test-json-secret-${timestamp}`;
+        const secretId = `test/${generateTestId('test-json-secret')}`;
         createdSecrets.push(`awssm://${region}/${secretId}`);
         
         const path = `awssm://${region}/${secretId}`;
@@ -48,8 +48,7 @@ describe('AWSSecretsManagerProvider', () => {
     }, 15000);
 
     it('should retrieve specific key from secret', async () => {
-        const timestamp = Date.now();
-        const secretId = `test/test-key-secret-${timestamp}`;
+        const secretId = `test/${generateTestId('test-key-secret')}`;
         createdSecrets.push(`awssm://${region}/${secretId}`);
         
         const path = `awssm://${region}/${secretId}`;
@@ -68,8 +67,7 @@ describe('AWSSecretsManagerProvider', () => {
     });
 
     it('should throw on invalid key in key-value secret', async () => {
-        const timestamp = Date.now();
-        const secretId = `test/test-invalid-key-${timestamp}`;
+        const secretId = `test/${generateTestId('test-invalid-key')}`;
         createdSecrets.push(`awssm://${region}/${secretId}`);
         
         const path = `awssm://${region}/${secretId}`;
@@ -83,7 +81,7 @@ describe('AWSSecretsManagerProvider', () => {
 
     describe('Write operations', () => {
         it('should update an existing secret', async () => {
-            const secretId = `test/test-update-secret-${Date.now()}`;
+            const secretId = `test/${generateTestId('test-update-secret')}`;
             const initialValue = `initial-${Date.now()}`;
             const updatedValue = `updated-${Date.now()}`;
             createdSecrets.push(`awssm://${region}/${secretId}`);
@@ -104,7 +102,7 @@ describe('AWSSecretsManagerProvider', () => {
         });
 
         it('should delete a secret', async () => {
-            const secretId = `test/test-delete-secret-${Date.now()}`;
+            const secretId = `test/${generateTestId('test-delete-secret')}`;
             const testValue = 'value-to-delete';
                         
             await provider.setSecret(`awssm://${region}/${secretId}`, testValue);
@@ -136,8 +134,7 @@ describe('AWSSecretsManagerProvider', () => {
 
     describe('Import integration: JSON bundle storage', () => {
         it('should store and retrieve env vars as JSON bundle', async () => {
-            const timestamp = Date.now();
-            const secretId = `test-import-json-${timestamp}`;
+            const secretId = generateTestId('test-import-json');
             createdSecrets.push(secretId);
             
             // Parse test env content
@@ -168,8 +165,7 @@ describe('AWSSecretsManagerProvider', () => {
         }, 20000);
 
         it('should retrieve specific fields from JSON bundle using :: syntax', async () => {
-            const timestamp = Date.now();
-            const secretId = `test-import-json-field-${timestamp}`;
+            const secretId = generateTestId('test-import-json-field');
             createdSecrets.push(secretId);
             
             const envVars = parseEnvContent(testEnvContent);
@@ -195,8 +191,7 @@ describe('AWSSecretsManagerProvider', () => {
         }, 20000);
 
         it('should handle JSON inside JSON bundle', async () => {
-            const timestamp = Date.now();
-            const secretId = `test-import-nested-json-${timestamp}`;
+            const secretId = generateTestId('test-import-nested-json');
             createdSecrets.push(secretId);
             
             const jsonBundle = JSON.stringify(nestedJsonData);
@@ -220,14 +215,14 @@ describe('AWSSecretsManagerProvider', () => {
 
     describe('Import integration: Individual secrets storage', () => {
         it('should store and retrieve multiple separate secrets', async () => {
-            const timestamp = Date.now();
+            const baseId = generateTestId('test-import');
             const secretIds: string[] = [];
             
             const testVars = simpleTestVars;
             
             // Store each var as a separate secret
             for (const [key, value] of Object.entries(testVars)) {
-                const secretId = `test-import-${key.toLowerCase()}-${timestamp}`;
+                const secretId = `${baseId}-${key.toLowerCase()}`;
                 secretIds.push(secretId);
                 createdSecrets.push(secretId);
                 
@@ -252,14 +247,14 @@ describe('AWSSecretsManagerProvider', () => {
         }, 20000);
 
         it('should store JSON values as individual secrets', async () => {
-            const timestamp = Date.now();
+            const baseId = generateTestId('test-import-json');
             const secretIds: string[] = [];
             
             const testVars = jsonTestVars;
             
             // Store JSON values as separate secrets
             for (const [key, value] of Object.entries(testVars)) {
-                const secretId = `test-import-json-${key.toLowerCase()}-${timestamp}`;
+                const secretId = `${baseId}-${key.toLowerCase()}`;
                 secretIds.push(secretId);
                 createdSecrets.push(secretId);
                 
