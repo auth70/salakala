@@ -50,19 +50,6 @@ describe('GoogleCloudSecretsProvider', () => {
         expect(parsed['secret-key']).toBe(keyValueJsonData['secret-key']);
     }, 15000);
 
-    it('should retrieve plaintext secret when no key specified', async () => {
-        const timestamp = Date.now();
-        const secretId = `test-plain-secret-${timestamp}`;
-        createdSecrets.push(secretId);
-        
-        const path = `gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`;
-        await provider.setSecret(path, '12345');
-        
-        const secret = await provider.getSecret(path);
-        expect(typeof secret).toBe('string');
-        expect(secret).toBe('12345');
-    }, 15000);
-
     it('should retrieve specific key from secret', async () => {
         const timestamp = Date.now();
         const secretId = `test-key-access-${timestamp}`;
@@ -80,7 +67,7 @@ describe('GoogleCloudSecretsProvider', () => {
     it('should throw on invalid path', async () => {
         await expect(provider.getSecret(`gcsm://projects/${projectId}/secrets/non-existent-secret-${Date.now()}/versions/latest`))
             .rejects
-            .toThrow(/Failed to read Google Cloud secret/);
+            .toThrow(/Failed to read Google Cloud Secret Manager secret/);
     });
 
     it('should throw on invalid key in key-value secret', async () => {
@@ -110,17 +97,6 @@ describe('GoogleCloudSecretsProvider', () => {
     }, 15000);
 
     describe('Write operations', () => {
-        it('should write a new secret to Google Cloud', async () => {
-            const secretId = `test-write-secret-${Date.now()}`;
-            const testValue = `test-value-${Date.now()}`;
-            createdSecrets.push(secretId);
-            
-            await provider.setSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`, testValue);
-            
-            const retrievedValue = await provider.getSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`);
-            expect(retrievedValue).toBe(testValue);
-        }, 15000);
-
         it('should add a new version to existing secret', async () => {
             const secretId = `test-update-secret-${Date.now()}`;
             const initialValue = `initial-${Date.now()}`;

@@ -1,5 +1,7 @@
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 import { SecretProvider, PathComponentType } from '../SecretProvider.js';
+import { CliHandler } from '../CliHandler.js';
+import { EMOJI } from '../constants.js';
 
 /**
  * Provider for accessing secrets stored in Google Cloud Secret Manager.
@@ -29,6 +31,7 @@ export class GoogleCloudSecretsProvider extends SecretProvider {
      * A single client is used as it handles multiple projects and regions internally.
      */
     private client: SecretManagerServiceClient;
+    private cli: CliHandler;
     
     /**
      * Initializes a new GoogleCloudSecretsProvider with a Secret Manager client.
@@ -37,6 +40,7 @@ export class GoogleCloudSecretsProvider extends SecretProvider {
     constructor() {
         super();
         this.client = new SecretManagerServiceClient();
+        this.cli = new CliHandler();
     }
 
     buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
@@ -60,12 +64,11 @@ export class GoogleCloudSecretsProvider extends SecretProvider {
         const parsedPath = this.parsePath(path);
         
         // Extract project, secret, and version from the parsed path
-        const pathMatch = parsedPath.path.match(/^projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/(.+)$/);
-        if (!pathMatch) {
-            throw new Error('Invalid Google Cloud secret path format. Expected: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[::jsonKey]');
-        }
-
-        const [, projectId, secretId, version] = pathMatch;
+        const [, projectId, secretId, version] = this.parsePathWithRegex(
+            parsedPath.path,
+            /^projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/(.+)$/,
+            'gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION[::jsonKey]'
+        );
         const secretPath = `projects/${projectId}/secrets/${secretId}/versions/${version}`;
 
         try {
@@ -108,7 +111,10 @@ export class GoogleCloudSecretsProvider extends SecretProvider {
                     errorMessage.includes('could not load the default credentials')) {
                     
                     // Ask if they want to run the auth command
-                    const response = await this.promptForAuthentication();
+                    const response = await this.cli.promptForAuthentication(
+                        'Google Cloud',
+                        'gcloud auth application-default login'
+                    );
                     if (response) {
                         throw new Error('Please try accessing the secret again after the authentication is complete.');
                     }
@@ -125,39 +131,10 @@ Authentication failed. Please authenticate with Google Cloud:
 3. Try accessing the secret again after authentication is complete.`;
                     throw new Error(`Failed to read Google Cloud secret: ${error.message}\n${loginInstructions}`);
                 }
-                throw new Error(`Failed to read Google Cloud secret: ${error.message}`);
             }
-            throw new Error('Failed to read Google Cloud secret: Unknown error');
+            
+            this.wrapProviderError(error, 'read', 'Google Cloud Secret Manager');
         }
-    }
-
-    /**
-     * Prompts the user to authenticate and runs the gcloud command if they agree.
-     * @returns {Promise<boolean>} True if authentication was attempted
-     */
-    private async promptForAuthentication(): Promise<boolean> {
-        const { execSync } = await import('child_process');
-        
-        try {
-            console.log('\nWould you like to authenticate with Google Cloud now? (y/N)');
-            const response = await new Promise<string>((resolve) => {
-                process.stdin.resume();
-                process.stdin.once('data', (data) => {
-                    process.stdin.pause();
-                    resolve(data.toString().trim().toLowerCase());
-                });
-            });
-
-            if (response === 'y' || response === 'yes') {
-                console.log('\nRunning authentication command...');
-                execSync('gcloud auth application-default login', { stdio: 'inherit' });
-                return true;
-            }
-        } catch (error) {
-            console.error('Failed to run authentication command:', error);
-        }
-        
-        return false;
     }
 
     /**
@@ -175,19 +152,18 @@ Authentication failed. Please authenticate with Google Cloud:
     async setSecret(path: string, value: string): Promise<void> {
         const parsedPath = this.parsePath(path);
         
-        const pathMatch = parsedPath.path.match(/^projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/(.+)$/);
-        if (!pathMatch) {
-            throw new Error('Invalid Google Cloud secret path format. Expected: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION');
-        }
-
-        const [, projectId, secretId] = pathMatch;
+        const [, projectId, secretId] = this.parsePathWithRegex(
+            parsedPath.path,
+            /^projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/(.+)$/,
+            'gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION'
+        );
         const parent = `projects/${projectId}`;
         const secretName = `projects/${projectId}/secrets/${secretId}`;
 
         try {
             // Try to create the secret - if it already exists, we'll catch that error
             try {
-                console.log(`🆕 Creating secret ${secretId}...`);
+                console.log(`${EMOJI.CREATING} Creating secret ${secretId}...`);
                 await this.client.createSecret({
                     parent: parent,
                     secretId: secretId,
@@ -200,7 +176,7 @@ Authentication failed. Please authenticate with Google Cloud:
             } catch (error: any) {
                 // Error code 6 = ALREADY_EXISTS - that's fine, we'll just add a version
                 if (error.code === 6) {
-                    console.log(`📦 Secret ${secretId} already exists, adding new version...`);
+                    console.log(`${EMOJI.EXISTING} Secret ${secretId} already exists, adding new version...`);
                 } else {
                     // Any other error should be thrown
                     throw error;
@@ -216,16 +192,7 @@ Authentication failed. Please authenticate with Google Cloud:
             });
 
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                const errorMessage = error.message.toLowerCase();
-                if (errorMessage.includes('permission denied') || 
-                    errorMessage.includes('unauthenticated') || 
-                    errorMessage.includes('unauthorized')) {
-                    throw new Error(`Failed to write Google Cloud secret: Authentication error. ${error.message}`);
-                }
-                throw new Error(`Failed to write Google Cloud secret: ${error.message}`);
-            }
-            throw new Error('Failed to write Google Cloud secret: Unknown error');
+            this.wrapProviderError(error, 'write', 'Google Cloud Secret Manager');
         }
     }
 
@@ -241,22 +208,18 @@ Authentication failed. Please authenticate with Google Cloud:
     async deleteSecret(path: string): Promise<void> {
         const parsedPath = this.parsePath(path);
         
-        const pathMatch = parsedPath.path.match(/^projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/(.+)$/);
-        if (!pathMatch) {
-            throw new Error('Invalid Google Cloud secret path format. Expected: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION');
-        }
-
-        const [, projectId, secretId] = pathMatch;
+        const [, projectId, secretId] = this.parsePathWithRegex(
+            parsedPath.path,
+            /^projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/(.+)$/,
+            'gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION'
+        );
         const secretName = `projects/${projectId}/secrets/${secretId}`;
 
         try {
-            console.log(`🗑️  Deleting secret ${secretId}...`);
+            console.log(`${EMOJI.DELETING} Deleting secret ${secretId}...`);
             await this.client.deleteSecret({ name: secretName });
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to delete Google Cloud secret: ${error.message}`);
-            }
-            throw new Error('Failed to delete Google Cloud secret: Unknown error');
+            this.wrapProviderError(error, 'delete', 'Google Cloud Secret Manager');
         }
     }
 }

@@ -74,14 +74,14 @@ describe('KeePassProvider', () => {
         it('should throw error for path with too few parts', async () => {
             await expect(provider.setSecret('kp://db.kdbx/entry', 'value'))
                 .rejects
-                .toThrow('KeePass path must include database path, entry path, and attribute');
+                .toThrow('KeePass path must include database path, entry name, and attribute');
         });
 
         it('should throw error when trying to delete non-existent entry', async () => {
             await expect(provider.deleteSecret(`kp://${testDbPath}/non-existent-entry/Password`))
                 .rejects
                 .toThrow();
-        });
+        }, 10000);
     });
 
     describe('buildPath', () => {

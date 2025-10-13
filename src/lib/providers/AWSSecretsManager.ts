@@ -1,6 +1,7 @@
 import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { SecretsManager, CreateSecretCommand, PutSecretValueCommand, DeleteSecretCommand, ResourceExistsException } from '@aws-sdk/client-secrets-manager';
-import { execSync } from 'child_process';
+import { CliHandler } from '../CliHandler.js';
+import { EMOJI } from '../constants.js';
 
 /**
  * Provider for accessing secrets stored in AWS Secrets Manager.
@@ -28,6 +29,7 @@ export class AWSSecretsManagerProvider extends SecretProvider {
      * recreating clients for the same region.
      */
     private clients: Map<string, SecretsManager>;
+    private cli: CliHandler;
 
     /**
      * Initializes a new AWSSecretsManagerProvider with an empty client cache.
@@ -35,6 +37,7 @@ export class AWSSecretsManagerProvider extends SecretProvider {
     constructor() {
         super();
         this.clients = new Map();
+        this.cli = new CliHandler();
     }
 
     buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
@@ -50,10 +53,7 @@ export class AWSSecretsManagerProvider extends SecretProvider {
      * @private
      */
     private getClient(region: string): SecretsManager {
-        if (!this.clients.has(region)) {
-            this.clients.set(region, new SecretsManager({ region }));
-        }
-        return this.clients.get(region)!;
+        return this.getOrCreateClient(this.clients, region, () => new SecretsManager({ region }));
     }
 
     /**
@@ -71,12 +71,11 @@ export class AWSSecretsManagerProvider extends SecretProvider {
         const parsedPath = this.parsePath(path);
         
         // Extract region and secret name from the path
-        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
-        if (!pathMatch) {
-            throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name[::jsonKey]');
-        }
-
-        const [, region, secretId] = pathMatch;
+        const [, region, secretId] = this.parsePathWithRegex(
+            parsedPath.path,
+            /^([^\/]+)\/(.+)$/,
+            'awssm://region/secret-name[::jsonKey]'
+        );
         const client = this.getClient(region);
 
         try {
@@ -112,45 +111,16 @@ export class AWSSecretsManagerProvider extends SecretProvider {
                     errorMessage.includes('authentication') || 
                     errorMessage.includes('access denied')) {
                     
-                    const response = await this.promptForAuthentication();
+                    const response = await this.cli.promptForAuthentication('AWS', 'aws configure');
                     if (response) {
                         this.clients.delete(region);
                         return this.getSecret(path);
                     }
                 }
-
-                throw new Error(`Failed to read AWS secret: ${error.message}`);
             }
-            throw new Error('Failed to read AWS secret: Unknown error');
+            
+            this.wrapProviderError(error, 'read', 'AWS Secrets Manager');
         }
-    }
-
-    /**
-     * Prompts the user to configure AWS credentials and runs the aws configure command if they agree.
-     * @returns {Promise<boolean>} True if authentication was attempted
-     * @private
-     */
-    private async promptForAuthentication(): Promise<boolean> {
-        try {
-            console.log('\nWould you like to configure AWS credentials now? (y/N)');
-            const response = await new Promise<string>((resolve) => {
-                process.stdin.resume();
-                process.stdin.once('data', (data) => {
-                    process.stdin.pause();
-                    resolve(data.toString().trim().toLowerCase());
-                });
-            });
-
-            if (response === 'y' || response === 'yes') {
-                console.log('\nRunning AWS configuration...');
-                execSync('aws configure', { stdio: 'inherit' });
-                return true;
-            }
-        } catch (error) {
-            console.error('Failed to run AWS configuration command:', error);
-        }
-        
-        return false;
     }
 
     /**
@@ -167,18 +137,17 @@ export class AWSSecretsManagerProvider extends SecretProvider {
     async setSecret(path: string, value: string): Promise<void> {
         const parsedPath = this.parsePath(path);
         
-        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
-        if (!pathMatch) {
-            throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name');
-        }
-
-        const [, region, secretId] = pathMatch;
+        const [, region, secretId] = this.parsePathWithRegex(
+            parsedPath.path,
+            /^([^\/]+)\/(.+)$/,
+            'awssm://region/secret-name'
+        );
         const client = this.getClient(region);
 
         try {
             // Try to create the secret first
             try {
-                console.log(`🆕 Creating secret ${secretId}...`);
+                console.log(`${EMOJI.CREATING} Creating secret ${secretId}...`);
                 await client.send(new CreateSecretCommand({
                     Name: secretId,
                     SecretString: value
@@ -186,7 +155,7 @@ export class AWSSecretsManagerProvider extends SecretProvider {
             } catch (error: any) {
                 // If secret already exists, update it instead
                 if (error.name === 'ResourceExistsException' || error instanceof ResourceExistsException) {
-                    console.log(`📦 Secret ${secretId} already exists, updating...`);
+                    console.log(`${EMOJI.EXISTING} Secret ${secretId} already exists, updating...`);
                     await client.send(new PutSecretValueCommand({
                         SecretId: secretId,
                         SecretString: value
@@ -196,16 +165,7 @@ export class AWSSecretsManagerProvider extends SecretProvider {
                 }
             }
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                const errorMessage = error.message.toLowerCase();
-                if (errorMessage.includes('credentials') || 
-                    errorMessage.includes('authentication') || 
-                    errorMessage.includes('access denied')) {
-                    throw new Error(`Failed to write AWS secret: Authentication error. ${error.message}`);
-                }
-                throw new Error(`Failed to write AWS secret: ${error.message}`);
-            }
-            throw new Error('Failed to write AWS secret: Unknown error');
+            this.wrapProviderError(error, 'write', 'AWS Secrets Manager');
         }
     }
 
@@ -221,25 +181,21 @@ export class AWSSecretsManagerProvider extends SecretProvider {
     async deleteSecret(path: string): Promise<void> {
         const parsedPath = this.parsePath(path);
         
-        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
-        if (!pathMatch) {
-            throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name');
-        }
-
-        const [, region, secretId] = pathMatch;
+        const [, region, secretId] = this.parsePathWithRegex(
+            parsedPath.path,
+            /^([^\/]+)\/(.+)$/,
+            'awssm://region/secret-name'
+        );
         const client = this.getClient(region);
 
         try {
-            console.log(`🗑️  Deleting secret ${secretId}...`);
+            console.log(`${EMOJI.DELETING} Deleting secret ${secretId}...`);
             await client.send(new DeleteSecretCommand({
                 SecretId: secretId,
                 ForceDeleteWithoutRecovery: true
             }));
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to delete AWS secret: ${error.message}`);
-            }
-            throw new Error('Failed to delete AWS secret: Unknown error');
+            this.wrapProviderError(error, 'delete', 'AWS Secrets Manager');
         }
     }
 }

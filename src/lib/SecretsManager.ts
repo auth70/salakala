@@ -8,6 +8,7 @@ import { AzureKeyVaultProvider } from "./providers/AzureKeyVault.js";
 import { LastPassProvider } from "./providers/LastPass.js";
 import { KeePassProvider } from "./providers/KeePass.js";
 import { SecretProvider } from "./SecretProvider.js";
+import { EMOJI } from "./constants.js";
 
 /**
  * Main secrets management class that coordinates multiple secret providers.
@@ -119,7 +120,7 @@ export class SecretsManager {
             const provider = this.providers.get(prefix)!;
             for (const [envVar, secretPath] of secretGroup.entries()) {
                 try {
-                    console.info(`🔒 Fetching ${envVar} from ${secretPath}`);
+                    console.info(`${EMOJI.FETCHING} Fetching ${envVar} from ${secretPath}`);
                     const secretValue = await provider.getSecret(secretPath);
                     secrets[envVar] = secretValue;
                 } catch (error: unknown) {

@@ -1,7 +1,8 @@
 import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { DefaultAzureCredential } from '@azure/identity';
-import { execSync } from 'child_process';
+import { CliHandler } from '../CliHandler.js';
+import { EMOJI } from '../constants.js';
 
 /**
  * Provider for accessing secrets stored in Azure Key Vault.
@@ -28,6 +29,7 @@ export class AzureKeyVaultProvider extends SecretProvider {
      * for the same vault instance.
      */
     private clients: Map<string, SecretClient>;
+    private cli: CliHandler;
 
     /**
      * Initializes a new AzureKeyVaultProvider with an empty client cache.
@@ -35,6 +37,7 @@ export class AzureKeyVaultProvider extends SecretProvider {
     constructor() {
         super();
         this.clients = new Map();
+        this.cli = new CliHandler();
     }
 
     buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
@@ -51,11 +54,10 @@ export class AzureKeyVaultProvider extends SecretProvider {
      * @private
      */
     private getClient(vaultUrl: string): SecretClient {
-        if (!this.clients.has(vaultUrl)) {
+        return this.getOrCreateClient(this.clients, vaultUrl, () => {
             const credential = new DefaultAzureCredential();
-            this.clients.set(vaultUrl, new SecretClient(vaultUrl, credential));
-        }
-        return this.clients.get(vaultUrl)!;
+            return new SecretClient(vaultUrl, credential);
+        });
     }
 
     /**
@@ -73,12 +75,11 @@ export class AzureKeyVaultProvider extends SecretProvider {
         const parsedPath = this.parsePath(path);
         
         // Extract vault URL and secret name from the parsed path
-        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
-        if (!pathMatch) {
-            throw new Error('Invalid Azure Key Vault path format. Expected: azurekv://vault-name.vault.azure.net/secret-name[::jsonKey]');
-        }
-
-        const [, vaultUrl, secretName] = pathMatch;
+        const [, vaultUrl, secretName] = this.parsePathWithRegex(
+            parsedPath.path,
+            /^([^\/]+)\/(.+)$/,
+            'azurekv://vault-name.vault.azure.net/secret-name[::jsonKey]'
+        );
         const fullVaultUrl = `https://${vaultUrl}`;
         const client = this.getClient(fullVaultUrl);
 
@@ -116,43 +117,15 @@ export class AzureKeyVaultProvider extends SecretProvider {
                     errorMessage.includes('credentials')) {
                     
                     // Ask if they want to authenticate with Azure
-                    const response = await this.promptForAuthentication();
+                    const response = await this.cli.promptForAuthentication('Azure', 'az login');
                     if (response) {
                         throw new Error('Please try accessing the secret again after Azure authentication is complete.');
                     }
                 }
-                throw new Error(`Failed to read Azure Key Vault secret: ${error.message}`);
             }
-            throw new Error('Failed to read Azure Key Vault secret: Unknown error');
+            
+            this.wrapProviderError(error, 'read', 'Azure Key Vault');
         }
-    }
-
-    /**
-     * Prompts the user to authenticate with Azure and runs the az login command if they agree.
-     * @returns {Promise<boolean>} True if authentication was attempted
-     * @private
-     */
-    private async promptForAuthentication(): Promise<boolean> {
-        try {
-            console.log('\nWould you like to authenticate with Azure now? (y/N)');
-            const response = await new Promise<string>((resolve) => {
-                process.stdin.resume();
-                process.stdin.once('data', (data) => {
-                    process.stdin.pause();
-                    resolve(data.toString().trim().toLowerCase());
-                });
-            });
-
-            if (response === 'y' || response === 'yes') {
-                console.log('\nRunning Azure authentication...');
-                execSync('az login', { stdio: 'inherit' });
-                return true;
-            }
-        } catch (error) {
-            console.error('Failed to run Azure authentication command:', error);
-        }
-        
-        return false;
     }
 
     /**
@@ -170,30 +143,19 @@ export class AzureKeyVaultProvider extends SecretProvider {
     async setSecret(path: string, value: string): Promise<void> {
         const parsedPath = this.parsePath(path);
         
-        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
-        if (!pathMatch) {
-            throw new Error('Invalid Azure Key Vault path format. Expected: azurekv://vault-name.vault.azure.net/secret-name');
-        }
-
-        const [, vaultUrl, secretName] = pathMatch;
+        const [, vaultUrl, secretName] = this.parsePathWithRegex(
+            parsedPath.path,
+            /^([^\/]+)\/(.+)$/,
+            'azurekv://vault-name.vault.azure.net/secret-name'
+        );
         const fullVaultUrl = `https://${vaultUrl}`;
         const client = this.getClient(fullVaultUrl);
 
         try {
-            console.log(`📝 Setting secret ${secretName} in Azure Key Vault...`);
+            console.log(`${EMOJI.UPDATING} Setting secret ${secretName} in Azure Key Vault...`);
             await client.setSecret(secretName, value);
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                const errorMessage = error.message.toLowerCase();
-                if (errorMessage.includes('authentication failed') || 
-                    errorMessage.includes('unauthorized') || 
-                    errorMessage.includes('forbidden') ||
-                    errorMessage.includes('credentials')) {
-                    throw new Error(`Failed to write Azure Key Vault secret: Authentication error. ${error.message}`);
-                }
-                throw new Error(`Failed to write Azure Key Vault secret: ${error.message}`);
-            }
-            throw new Error('Failed to write Azure Key Vault secret: Unknown error');
+            this.wrapProviderError(error, 'write', 'Azure Key Vault');
         }
     }
 
@@ -209,24 +171,20 @@ export class AzureKeyVaultProvider extends SecretProvider {
     async deleteSecret(path: string): Promise<void> {
         const parsedPath = this.parsePath(path);
         
-        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
-        if (!pathMatch) {
-            throw new Error('Invalid Azure Key Vault path format. Expected: azurekv://vault-name.vault.azure.net/secret-name');
-        }
-
-        const [, vaultUrl, secretName] = pathMatch;
+        const [, vaultUrl, secretName] = this.parsePathWithRegex(
+            parsedPath.path,
+            /^([^\/]+)\/(.+)$/,
+            'azurekv://vault-name.vault.azure.net/secret-name'
+        );
         const fullVaultUrl = `https://${vaultUrl}`;
         const client = this.getClient(fullVaultUrl);
 
         try {
-            console.log(`🗑️  Deleting secret ${secretName}...`);
+            console.log(`${EMOJI.DELETING} Deleting secret ${secretName}...`);
             const poller = await client.beginDeleteSecret(secretName);
             await poller.pollUntilDone();
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to delete Azure Key Vault secret: ${error.message}`);
-            }
-            throw new Error('Failed to delete Azure Key Vault secret: Unknown error');
+            this.wrapProviderError(error, 'delete', 'Azure Key Vault');
         }
     }
 } 

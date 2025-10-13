@@ -1,5 +1,6 @@
 import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { CliHandler } from '../CliHandler.js';
+import { EMOJI } from '../constants.js';
 
 /**
  * Provider for accessing secrets stored in 1Password using the 1Password CLI (op).
@@ -83,7 +84,7 @@ export class OnePasswordProvider extends SecretProvider {
             // Only attempt interactive signin if not using service account token
             if (!process.env.OP_SERVICE_ACCOUNT_TOKEN) {
                 try {
-                    console.log('🔑 1Password needs to login. You are interacting with 1Password CLI now.');
+                    console.log(`${EMOJI.LOGIN} 1Password needs to login. You are interacting with 1Password CLI now.`);
                     const loginResponse = await this.cli.run('op signin --raw', {
                         interactive: true,
                         passwordPrompt: 'Enter the password for',
@@ -104,18 +105,12 @@ export class OnePasswordProvider extends SecretProvider {
 
                     return secretValue;
                 } catch (retryError: unknown) {
-                    if (retryError instanceof Error) {
-                        throw new Error(`Failed to read 1Password secret: ${retryError.message}`);
-                    }
-                    throw new Error('Failed to read 1Password secret: Unknown error');
+                    this.wrapProviderError(retryError, 'read', '1Password');
                 }
             }
             
             // If using service account token, or other error, throw directly
-            if (error instanceof Error) {
-                throw new Error(`Failed to read 1Password secret: ${error.message}`);
-            }
-            throw new Error('Failed to read 1Password secret: Unknown error');
+            this.wrapProviderError(error, 'read', '1Password');
         }
     }
 
@@ -211,10 +206,7 @@ export class OnePasswordProvider extends SecretProvider {
                 }
             }
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to write 1Password secret: ${error.message}`);
-            }
-            throw new Error('Failed to write 1Password secret: Unknown error');
+            this.wrapProviderError(error, 'write', '1Password');
         }
     }
 
@@ -244,7 +236,7 @@ export class OnePasswordProvider extends SecretProvider {
         const itemName = pathParts[1];
 
         try {
-            console.log(`🗑️  Deleting 1Password item ${itemName}...`);
+            console.log(`${EMOJI.DELETING} Deleting 1Password item ${itemName}...`);
             const envVars = this.sessionToken ? { OP_SESSION: this.sessionToken } : undefined;
             const deleteCommand = `op item delete "${itemName}" --vault="${vaultName}"`;
 
@@ -253,10 +245,7 @@ export class OnePasswordProvider extends SecretProvider {
                 throw new Error(deleteResponse.error?.message || deleteResponse.message || 'Failed to delete 1Password item');
             }
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to delete 1Password secret: ${error.message}`);
-            }
-            throw new Error('Failed to delete 1Password secret: Unknown error');
+            this.wrapProviderError(error, 'delete', '1Password');
         }
     }
 }

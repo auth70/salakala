@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { SecretProvider } from './SecretProvider.js';
 import { select } from '@inquirer/prompts';
+import { EMOJI } from './constants.js';
 
 /**
  * Configuration structure for sync operations
@@ -205,7 +206,7 @@ export class SyncManager {
 
             let sourceValue: string;
             try {
-                console.log(`🔒 Fetching ${secretName} from ${sourcePath}`);
+                console.log(`${EMOJI.FETCHING} Fetching ${secretName} from ${sourcePath}`);
                 sourceValue = await sourceProvider.getSecret(sourcePath);
             } catch (error) {
                 results.push({
@@ -255,7 +256,7 @@ export class SyncManager {
                     }
                     
                     if (choice === 'skip') {
-                        console.log(`⏭️  Skipping ${secretName} → ${destination}`);
+                        console.log(`${EMOJI.SKIPPED} Skipping ${secretName} → ${destination}`);
                         results.push({
                             secretName,
                             destination,
@@ -271,14 +272,14 @@ export class SyncManager {
                 }
 
                 try {
-                    console.log(`📝 Writing ${secretName} to ${destination}`);
+                    console.log(`${EMOJI.UPDATING} Writing ${secretName} to ${destination}`);
                     await destProvider.setSecret(destination, sourceValue);
                     results.push({
                         secretName,
                         destination,
                         success: true
                     });
-                    console.log(`✅ Successfully synced ${secretName} to ${destination}`);
+                    console.log(`${EMOJI.SUCCESS} Successfully synced ${secretName} to ${destination}`);
                 } catch (error) {
                     results.push({
                         secretName,
@@ -308,9 +309,9 @@ export class SyncManager {
         console.log('\n' + '='.repeat(50));
         console.log('Sync Summary:');
         console.log(`  Total operations: ${total}`);
-        console.log(`  ✅ Successful: ${successful}`);
-        console.log(`  ⏭️  Skipped: ${skipped}`);
-        console.log(`  ❌ Failed: ${failed}`);
+        console.log(`  ${EMOJI.SUCCESS} Successful: ${successful}`);
+        console.log(`  ${EMOJI.SKIPPED} Skipped: ${skipped}`);
+        console.log(`  ${EMOJI.ERROR} Failed: ${failed}`);
         console.log('='.repeat(50));
 
         if (failed > 0) {

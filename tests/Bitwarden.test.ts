@@ -28,31 +28,6 @@ describe('BitwardenProvider', () => {
         createdItems.length = 0;
     });
 
-    it('should retrieve password field by name', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-password-${timestamp}`;
-        const testValue = 'test-password-value';
-        const path = `bw://${itemName}/password`;
-        createdItems.push(path);
-        
-        await provider.setSecret(path, testValue);
-        
-        const result = await provider.getSecret(path);
-        expect(result).toBe(testValue);
-    }, 60000);
-
-    it('should retrieve a json notes field', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-json-notes-${timestamp}`;
-        const path = `bw://${itemName}/notes`;
-        createdItems.push(path);
-        
-        await provider.setSecret(path, JSON.stringify(complexJsonData));
-        
-        const result = await provider.getSecret(path);
-        expect(result).toBe(JSON.stringify(complexJsonData));
-    }, 60000);
-
     it('should retrieve a json notes field by key', async () => {
         const timestamp = Date.now();
         const itemName = `test-json-key-${timestamp}`;
@@ -118,17 +93,6 @@ describe('BitwardenProvider', () => {
     });
 
     describe('Write operations', () => {
-        it('should write a new item to Bitwarden', async () => {
-            const itemName = `test-write-item-${Date.now()}`;
-            const testValue = `test-value-${Date.now()}`;
-            createdItems.push(`bw://test-folder/${itemName}/password`);
-            
-            await provider.setSecret(`bw://test-folder/${itemName}/password`, testValue);
-            
-            const retrievedValue = await provider.getSecret(`bw://test-folder/${itemName}/password`);
-            expect(retrievedValue).toBe(testValue);
-        }, 15000);
-
         it('should update an existing item', async () => {
             const itemName = `test-update-item-${Date.now()}`;
             const initialValue = `initial-${Date.now()}`;

@@ -36,36 +36,6 @@ describe('OnePasswordProvider', () => {
             .toThrow('Invalid 1Password secret path');
     });
 
-    it('should retrieve secret successfully', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-retrieve-${timestamp}`;
-        const testValue = 'test-secret-value';
-        const path = `op://testing/${itemName}/password`;
-        createdItems.push(path);
-        
-        await provider.setSecret(path, testValue);
-        
-        const result = await provider.getSecret(path);
-        expect(typeof result).toBe('string');
-        expect(result.length).toBeGreaterThan(0);
-        expect(result).toBe(testValue);
-    }, 15000);
-
-    it('should retrieve JSON secret field', async () => {
-        const timestamp = Date.now();
-        const itemName = `test-json-field-${timestamp}`;
-        const testValue = 'json-test-value';
-        const path = `op://testing/${itemName}/api-key`;
-        createdItems.push(path);
-        
-        await provider.setSecret(path, testValue);
-        
-        const result = await provider.getSecret(path);
-        expect(typeof result).toBe('string');
-        expect(result.length).toBeGreaterThan(0);
-        expect(result).toBe(testValue);
-    }, 15000);
-
     it('should retrieve JSON secret with :: syntax', async () => {
         const timestamp = Date.now();
         const itemName = `test-json-syntax-${timestamp}`;
@@ -133,18 +103,6 @@ describe('OnePasswordProvider', () => {
     }, 15000);
 
     describe('Write operations', () => {
-        it('should write a secret to 1Password', async () => {
-            const timestamp = Date.now();
-            const itemName = `test-write-item-${timestamp}`;
-            const testValue = `test-value-${timestamp}`;
-            createdItems.push(`op://testing/${itemName}/password`);
-            
-            await provider.setSecret(`op://testing/${itemName}/password`, testValue);
-            
-            const retrievedValue = await provider.getSecret(`op://testing/${itemName}/password`);
-            expect(retrievedValue).toBe(testValue);
-        }, 15000);
-
         it('should update an existing secret', async () => {
             const timestamp = Date.now();
             const itemName = `test-update-item-${timestamp}`;

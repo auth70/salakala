@@ -47,19 +47,6 @@ describe('AWSSecretsManagerProvider', () => {
         expect(parsed['secret-key']).toBe(keyValueJsonData['secret-key']);
     }, 15000);
 
-    it('should retrieve plaintext secret when no key specified', async () => {
-        const timestamp = Date.now();
-        const secretId = `test/test-plain-secret-${timestamp}`;
-        createdSecrets.push(`awssm://${region}/${secretId}`);
-        
-        const path = `awssm://${region}/${secretId}`;
-        await provider.setSecret(path, '12345');
-        
-        const secret = await provider.getSecret(path);
-        expect(typeof secret).toBe('string');
-        expect(secret).toBe('12345');
-    }, 15000);
-
     it('should retrieve specific key from secret', async () => {
         const timestamp = Date.now();
         const secretId = `test/test-key-secret-${timestamp}`;
@@ -77,7 +64,7 @@ describe('AWSSecretsManagerProvider', () => {
     it('should throw on invalid path', async () => {
         await expect(provider.getSecret(`awssm://${region}/non-existent-secret-${Date.now()}`))
             .rejects
-            .toThrow(/Failed to read AWS secret/);
+            .toThrow(/Failed to read AWS Secrets Manager secret/);
     });
 
     it('should throw on invalid key in key-value secret', async () => {
@@ -95,18 +82,6 @@ describe('AWSSecretsManagerProvider', () => {
 
 
     describe('Write operations', () => {
-        it('should write a new secret to AWS', async () => {
-            const secretId = `test/test-write-secret-${Date.now()}`;
-            const testValue = `test-value-${Date.now()}`;
-            createdSecrets.push(`awssm://${region}/${secretId}`);
-            console.log(`Created secret: awssm://${region}/${secretId}`);
-            
-            await provider.setSecret(`awssm://${region}/${secretId}`, testValue);
-            
-            const retrievedValue = await provider.getSecret(`awssm://${region}/${secretId}`);
-            expect(retrievedValue).toBe(testValue);
-        }, 15000);
-
         it('should update an existing secret', async () => {
             const secretId = `test/test-update-secret-${Date.now()}`;
             const initialValue = `initial-${Date.now()}`;

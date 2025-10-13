@@ -48,7 +48,7 @@ function censor(str: string) {
 }
 
 /**
- * Prunes annoying punycode warning from Google Cloud SDK output
+ * Removes deprecation warnings from provider CLI output
  * @param str - The string to prune
  * @returns The pruned string
  */
@@ -80,6 +80,37 @@ export class CliHandler {
      */
     escapeShellValue(value: string): string {
         return value.replace(/'/g, "'\\''");
+    }
+
+    /**
+     * Prompts the user to authenticate with a cloud service and runs the specified command if they agree.
+     * 
+     * @param {string} serviceName - Name of the service (e.g., 'Google Cloud', 'Azure', 'AWS')
+     * @param {string} command - The authentication command to run (e.g., 'gcloud auth application-default login')
+     * @returns {Promise<boolean>} True if authentication was attempted, false otherwise
+     */
+    async promptForAuthentication(serviceName: string, command: string): Promise<boolean> {
+        try {
+            console.log(`\nWould you like to authenticate with ${serviceName} now? (y/N)`);
+            const response = await new Promise<string>((resolve) => {
+                process.stdin.resume();
+                process.stdin.once('data', (data) => {
+                    process.stdin.pause();
+                    resolve(data.toString().trim().toLowerCase());
+                });
+            });
+
+            if (response === 'y' || response === 'yes') {
+                console.log(`\nRunning ${serviceName} authentication...`);
+                const { execSync } = await import('child_process');
+                execSync(command, { stdio: 'inherit' });
+                return true;
+            }
+        } catch (error) {
+            console.error(`Failed to run ${serviceName} authentication command:`, error);
+        }
+        
+        return false;
     }
 
     /**

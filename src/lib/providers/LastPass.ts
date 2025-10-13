@@ -1,23 +1,8 @@
 import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { CliHandler } from '../CliHandler.js';
 import inquirer from 'inquirer';
+import { EMOJI } from '../constants.js';
 
-/*
-[
-  {
-    "id": "6754388171590937865",
-    "name": "test",
-    "fullname": "test-folder/test",
-    "username": "testuser",
-    "password": "testpassword",
-    "last_modified_gmt": "1736306225",
-    "last_touch": "0",
-    "group": "test-folder",
-    "url": "http://google.com",
-    "note": "{\"foo\":\"bar\",\"baz\":{\"lorem\":[\"ipsum\",\"dolor\"]}}" 
-  } 
-] 
-*/
 type LastPassItem = {
     id: string;
     name: string;
@@ -72,24 +57,17 @@ export class LastPassProvider extends SecretProvider {
         }
         if(result.stdout.includes('Not logged in')) {
             this.isLoggedIn = false;
-            console.log('❌ LastPass CLI is not logged in.');
+            console.log(`${EMOJI.ERROR} LastPass CLI is not logged in.`);
             await this.tryLogin();
         } else if(result.stdout.includes('Logged in as')) {
             this.isLoggedIn = true;
-            console.log('✅ LastPass CLI is logged in.');
+            console.log(`${EMOJI.SUCCESS} LastPass CLI is logged in.`);
         } else {
             console.error(result);
             throw new Error('Failed to parse lpass status output');
         }
     }
 
-    /* 
-% lpass ls -l --color=never
-(none)/test [id: 6189975547628296505]
-(none)/top-level-secure-note [id: 9120810406532001297]
-custom-field-test-folder/custom-field-test [id: 6922534590124668849]
-test-folder/test [id: 6754388171590937865]
-     */
     async getItems(): Promise<{ path: string, id: string }[]> {
         const result = await this.cli.run('lpass ls --color=never');
         const lines = result.stdout.split('\n').filter(line => line.trim() !== '');
@@ -115,7 +93,7 @@ test-folder/test [id: 6754388171590937865]
             name: 'username',
             message: 'Enter your LastPass username:',
         });
-        console.log('🔑 LastPass needs to login. You are interacting with LastPass CLI now.');
+        console.log(`${EMOJI.LOGIN} LastPass needs to login. You are interacting with LastPass CLI now.`);
         const result = await this.cli.run(`lpass login ${promptResult.username}`, {
             interactive: true,
         });
@@ -156,10 +134,6 @@ test-folder/test [id: 6754388171590937865]
             fieldName = parsedPath.pathParts[2];
         }
 
-        console.log('queryPath ', queryPath);
-        console.log('fieldName ', fieldName);
-        console.log('items ', items);
-
         const item = items.find(item => item.path === queryPath);
         if(!item) {
             throw new Error(`Item '${queryPath}' not found`);
@@ -171,7 +145,6 @@ test-folder/test [id: 6754388171590937865]
             throw new Error(result.error?.message || result.message || `Unable to run lpass show for path '${queryPath}'`);
         }
         const json = JSON.parse(result.stdout) as LastPassItem[];
-        console.log('json ', json);
         if(json.length === 0) {
             throw new Error(`No secret found at path '${queryPath}'`);
         }
@@ -241,7 +214,7 @@ test-folder/test [id: 6754388171590937865]
 
             if (itemExists) {
                 // Update existing item
-                console.log(`📝 Updating LastPass item ${itemName}, field ${fieldName}...`);
+                console.log(`${EMOJI.UPDATING} Updating LastPass item ${itemName}, field ${fieldName}...`);
                 
                 const escapedValue = this.cli.escapeShellValue(value);
                 
@@ -274,7 +247,7 @@ test-folder/test [id: 6754388171590937865]
                 }
             } else {
                 // Create new item
-                console.log(`🆕 Creating LastPass item ${itemName}...`);
+                console.log(`${EMOJI.CREATING} Creating LastPass item ${itemName}...`);
                 
                 const escapedValue = this.cli.escapeShellValue(value);
                 
@@ -300,10 +273,7 @@ test-folder/test [id: 6754388171590937865]
                 }
             }
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to write LastPass secret: ${error.message}`);
-            }
-            throw new Error('Failed to write LastPass secret: Unknown error');
+            this.wrapProviderError(error, 'write', 'LastPass');
         }
     }
 
@@ -329,17 +299,14 @@ test-folder/test [id: 6754388171590937865]
         const itemName = parsedPath.pathParts.slice(0, -1).join('/');
 
         try {
-            console.log(`🗑️  Deleting LastPass item ${itemName}...`);
+            console.log(`${EMOJI.DELETING} Deleting LastPass item ${itemName}...`);
             const deleteResponse = await this.cli.run(`lpass rm "${itemName}"`);
             
             if (deleteResponse.state !== 'ok') {
                 throw new Error(deleteResponse.message || 'Failed to delete item');
             }
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to delete LastPass secret: ${error.message}`);
-            }
-            throw new Error('Failed to delete LastPass secret: Unknown error');
+            this.wrapProviderError(error, 'delete', 'LastPass');
         }
     }
 

@@ -1,5 +1,6 @@
 import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { CliHandler } from '../CliHandler.js';
+import { EMOJI } from '../constants.js';
 
 /**
  * Provider for accessing secrets stored in KeePass databases using the KeePassXC CLI.
@@ -76,20 +77,12 @@ export class KeePassProvider extends SecretProvider {
 
         let secretValue: string;
 
-        // Try with stored password first if available
-        if (this.password) {
-            try {
+        try {
+            // Try with stored password first if available
+            if (this.password) {
                 secretValue = await this.getSecretValue(dbPath, entryName, attribute, this.password);
-            } catch (error: unknown) {
-                // If using stored password, or other error, throw directly
-                if (error instanceof Error) {
-                    throw new Error(`Failed to read KeePass secret: ${error.message}`);
-                }
-                throw new Error('Failed to read KeePass secret: Unknown error');
-            }
-        } else {
-            try {
-                console.log('🔑 KeePassXC needs a password. You are interacting with KeePassXC CLI now.');
+            } else {
+                console.log(`${EMOJI.LOGIN} KeePassXC needs a password. You are interacting with KeePassXC CLI now.`);
                 const response = await this.cli.run(`keepassxc-cli show -a "${attribute}" "${dbPath}" "${entryName}"`, {
                     interactive: true,
                     passwordPrompt: 'Enter password to unlock'
@@ -102,12 +95,9 @@ export class KeePassProvider extends SecretProvider {
                     throw new Error(`No value found for entry '${entryName}' attribute '${attribute}' in database '${dbPath}'`);
                 }
                 secretValue = value;
-            } catch (retryError: unknown) {
-                if (retryError instanceof Error) {
-                    throw new Error(`Failed to read KeePass secret: ${retryError.message}`);
-                }
-                throw new Error('Failed to read KeePass secret: Unknown error');
             }
+        } catch (error: unknown) {
+            this.wrapProviderError(error, 'read', 'KeePass');
         }
 
         // If there's a JSON key, parse and extract the value
@@ -170,38 +160,53 @@ export class KeePassProvider extends SecretProvider {
     async setSecret(path: string, value: string): Promise<void> {
         const parsedPath = this.parsePath(path);
         
-        if (parsedPath.pathParts.length < 3) {
-            throw new Error('KeePass path must include database path, entry path, and attribute');
+        // Parse path: kp://path/to/database.kdbx/entry-name/attribute
+        const secretPath = parsedPath.path;
+        const parts = secretPath.split('/');
+        
+        // Find the part that ends with .kdbx
+        let dbPathEndIndex = -1;
+        for (let i = 0; i < parts.length; i++) {
+            if (parts[i].endsWith('.kdbx')) {
+                dbPathEndIndex = i;
+                break;
+            }
         }
 
-        const dbPath = parsedPath.pathParts[0];
-        const entryName = parsedPath.pathParts.slice(1, -1).join('/');
-        const attribute = parsedPath.pathParts[parsedPath.pathParts.length - 1];
+        if (dbPathEndIndex === -1 || dbPathEndIndex >= parts.length - 2) {
+            throw new Error('KeePass path must include database path, entry name, and attribute');
+        }
+
+        const dbPath = parts.slice(0, dbPathEndIndex + 1).join('/');
+        const entryName = parts[dbPathEndIndex + 1];
+        const attribute = parts[dbPathEndIndex + 2];
 
         try {
+            // Determine CLI options based on password availability
+            const cliOptions = this.password 
+                ? { password: this.password, passwordPrompt: 'Enter password to unlock' }
+                : { interactive: true, passwordPrompt: 'Enter password to unlock' };
+            
             // Check if entry exists
             const showResponse = await this.cli.run(
                 `keepassxc-cli show "${dbPath}" "${entryName}"`,
-                {
-                    interactive: true,
-                    passwordPrompt: 'Enter password to unlock',
-                    env: process.env.KEEPASS_PASSWORD ? { KEEPASS_PASSWORD: process.env.KEEPASS_PASSWORD } : {}
-                }
+                cliOptions
             );
             const entryExists = showResponse.state === 'ok';
 
             if (entryExists) {
                 // Update existing entry
-                console.log(`📝 Updating KeePass entry ${entryName}, attribute ${attribute}...`);
-                console.log('⚠️  KeePassXC CLI requires interactive password entry for editing');
+                console.log(`${EMOJI.UPDATING} Updating KeePass entry ${entryName}, attribute ${attribute}...`);
+                if (!this.password) {
+                    console.log(`${EMOJI.WARNING} KeePassXC CLI requires interactive password entry for editing`);
+                }
                 
                 // Use edit-password for Password attribute
                 if (attribute === 'Password') {
                     const editResponse = await this.cli.run(
                         `keepassxc-cli edit-password "${dbPath}" "${entryName}"`,
                         {
-                            interactive: true,
-                            passwordPrompt: 'Enter password to unlock',
+                            ...cliOptions,
                             password: value
                         }
                     );
@@ -213,10 +218,7 @@ export class KeePassProvider extends SecretProvider {
                     const escapedValue = this.cli.escapeShellValue(value);
                     const editResponse = await this.cli.run(
                         `keepassxc-cli set "${dbPath}" "${entryName}" "${attribute}" '${escapedValue}'`,
-                        {
-                            interactive: true,
-                            passwordPrompt: 'Enter password to unlock'
-                        }
+                        cliOptions
                     );
                     
                     if (editResponse.state !== 'ok') {
@@ -225,14 +227,15 @@ export class KeePassProvider extends SecretProvider {
                 }
             } else {
                 // Create new entry
-                console.log(`🆕 Creating KeePass entry ${entryName}...`);
-                console.log('⚠️  KeePassXC CLI requires interactive password entry for adding entries');
+                console.log(`${EMOJI.CREATING} Creating KeePass entry ${entryName}...`);
+                if (!this.password) {
+                    console.log(`${EMOJI.WARNING} KeePassXC CLI requires interactive password entry for adding entries`);
+                }
                 
                 const addResponse = await this.cli.run(
                     `keepassxc-cli add "${dbPath}" "${entryName}"`,
                     {
-                        interactive: true,
-                        passwordPrompt: 'Enter password to unlock',
+                        ...cliOptions,
                         password: attribute === 'Password' ? value : undefined
                     }
                 );
@@ -245,10 +248,7 @@ export class KeePassProvider extends SecretProvider {
                 if (attribute !== 'Password') {
                     const setResponse = await this.cli.run(
                         `keepassxc-cli set "${dbPath}" "${entryName}" "${attribute}" "${value}"`,
-                        {
-                            interactive: true,
-                            passwordPrompt: 'Enter password to unlock'
-                        }
+                        cliOptions
                     );
                     
                     if (setResponse.state !== 'ok') {
@@ -257,10 +257,7 @@ export class KeePassProvider extends SecretProvider {
                 }
             }
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to write KeePass secret: ${error.message}`);
-            }
-            throw new Error('Failed to write KeePass secret: Unknown error');
+            this.wrapProviderError(error, 'write', 'KeePass');
         }
     }
 
@@ -279,33 +276,47 @@ export class KeePassProvider extends SecretProvider {
     async deleteSecret(path: string): Promise<void> {
         const parsedPath = this.parsePath(path);
         
-        if (parsedPath.pathParts.length < 3) {
-            throw new Error('KeePass path must include database path, entry path, and attribute');
+        // Parse path: kp://path/to/database.kdbx/entry-name/attribute
+        const secretPath = parsedPath.path;
+        const parts = secretPath.split('/');
+        
+        // Find the part that ends with .kdbx
+        let dbPathEndIndex = -1;
+        for (let i = 0; i < parts.length; i++) {
+            if (parts[i].endsWith('.kdbx')) {
+                dbPathEndIndex = i;
+                break;
+            }
         }
 
-        const dbPath = parsedPath.pathParts[0];
-        const entryName = parsedPath.pathParts.slice(1, -1).join('/');
+        if (dbPathEndIndex === -1 || dbPathEndIndex >= parts.length - 2) {
+            throw new Error('KeePass path must include database path, entry name, and attribute');
+        }
+
+        const dbPath = parts.slice(0, dbPathEndIndex + 1).join('/');
+        const entryName = parts[dbPathEndIndex + 1];
 
         try {
-            console.log(`🗑️  Deleting KeePass entry ${entryName}...`);
-            console.log('⚠️  KeePassXC CLI requires interactive password entry for deletion');
+            console.log(`${EMOJI.DELETING} Deleting KeePass entry ${entryName}...`);
+            
+            const deleteOptions = this.password 
+                ? { password: this.password, passwordPrompt: 'Enter password to unlock' }
+                : { interactive: true, passwordPrompt: 'Enter password to unlock' };
+            
+            if (!this.password) {
+                console.log(`${EMOJI.WARNING} KeePassXC CLI requires interactive password entry for deletion`);
+            }
             
             const deleteResponse = await this.cli.run(
                 `keepassxc-cli rm "${dbPath}" "${entryName}"`,
-                {
-                    interactive: true,
-                    passwordPrompt: 'Enter password to unlock'
-                }
+                deleteOptions
             );
             
             if (deleteResponse.state !== 'ok') {
                 throw new Error(deleteResponse.message || 'Failed to delete entry');
             }
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to delete KeePass secret: ${error.message}`);
-            }
-            throw new Error('Failed to delete KeePass secret: Unknown error');
+            this.wrapProviderError(error, 'delete', 'KeePass');
         }
     }
 }

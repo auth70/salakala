@@ -1,6 +1,7 @@
 import { execSync } from 'child_process';
 import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { CliHandler } from '../CliHandler.js';
+import { EMOJI } from '../constants.js';
 
 type BitwardenFolder = {
     id: string | null;
@@ -101,32 +102,23 @@ export class BitwardenProvider extends SecretProvider {
 
     /**
      * Retrieves a specific secret from Bitwarden.
-     * @param {string} path - The path to the secret.
-     * @returns {Promise<string>} A promise that resolves to the secret.
+     * 
+     * Supported path formats:
+     * - bw://item/field - Item without folder
+     * - bw://folder/item/field - Item in a folder
+     * 
+     * @param {string} path - The path to the secret
+     * @returns {Promise<string>} A promise that resolves to the secret
      */
     async getSecret(path: string): Promise<string> {
         await this.getItems();
         const parsedPath = this.parsePath(path);
         if(parsedPath.pathParts.length < 2) {
-            throw new Error(`Bitwarden path must be in the format: bw://folder_id_or_name/item_id_or_name/field_name[:JSON_key]`);
+            throw new Error(`Bitwarden path must be in the format: bw://[folder/]item/field[::jsonKey]`);
         }
-        let itemPath = '';
-        let fieldPath = '';
-        if(parsedPath.pathParts.length === 2) {
-            itemPath = parsedPath.pathParts[0];
-            fieldPath = parsedPath.pathParts[1];
-        } else if(parsedPath.pathParts.length === 3) {
-            if(this.folders.find((folder) => folder.name === parsedPath.pathParts[0])) {
-                itemPath = parsedPath.pathParts.slice(0, -1).join('/');
-                fieldPath = parsedPath.pathParts[2];
-            } else {
-                itemPath = parsedPath.pathParts.slice(0, -2).join('/');
-                fieldPath = parsedPath.pathParts[1];
-            }
-        } else {
-            itemPath = parsedPath.pathParts.slice(0, -2).join('/');
-            fieldPath = parsedPath.pathParts[1];
-        }
+
+        // Determine item path and field based on path structure
+        const { itemPath, fieldPath } = this.parseItemPath(parsedPath.pathParts);
         const item = this.items.find((item) => item.id === itemPath || item.path === itemPath);
         let foundValue = null;
         if(!item) {
@@ -211,7 +203,7 @@ export class BitwardenProvider extends SecretProvider {
             const loginStatusResponse = await this.cli.run('bw login --check');
             if(loginStatusResponse.state !== 'ok' || !loginStatusResponse.stdout.includes("You are logged in")) {
                 // Try to login
-                console.log('🔑 Bitwarden needs to login. You are interacting with Bitwarden CLI now.');
+                console.log(`${EMOJI.LOGIN} Bitwarden needs to login. You are interacting with Bitwarden CLI now.`);
                 const loginResponse = await this.cli.run('bw login --raw', {
                     interactive: true,
                     passwordPrompt: 'Master password'
@@ -222,7 +214,7 @@ export class BitwardenProvider extends SecretProvider {
                 this.sessionKey = loginResponse.stdout;
             } else {
                 // Unlock
-                console.log('🔑 Bitwarden needs to unlock your session. You are interacting with Bitwarden CLI now.');
+                console.log(`${EMOJI.LOGIN} Bitwarden needs to unlock your session. You are interacting with Bitwarden CLI now.`);
                 const sessionResponse = await this.cli.run('bw unlock --raw', {
                     interactive: true,
                     passwordPrompt: 'Master password'
@@ -245,6 +237,39 @@ export class BitwardenProvider extends SecretProvider {
         }
         this.folders = JSON.parse(response.stdout) as BitwardenFolder[];
         return this.folders;
+    }
+
+    /**
+     * Parses Bitwarden path parts into item path and field path.
+     * 
+     * @param {string[]} pathParts - The path parts from the URI
+     * @returns {{ itemPath: string, fieldPath: string }} The parsed paths
+     * @private
+     */
+    private parseItemPath(pathParts: string[]): { itemPath: string, fieldPath: string } {
+        if (pathParts.length === 2) {
+            // Format: bw://item/field
+            return {
+                itemPath: pathParts[0],
+                fieldPath: pathParts[1]
+            };
+        } else {
+            // Format: bw://folder/item/field
+            // Check if first part is a folder
+            const hasFolder = this.folders.some(folder => folder.name === pathParts[0]);
+            if (hasFolder) {
+                return {
+                    itemPath: pathParts.slice(0, -1).join('/'),
+                    fieldPath: pathParts[pathParts.length - 1]
+                };
+            } else {
+                // First part is not a folder, treat as item name
+                return {
+                    itemPath: pathParts[0],
+                    fieldPath: pathParts[1]
+                };
+            }
+        }
     }
 
     /**
@@ -283,7 +308,7 @@ export class BitwardenProvider extends SecretProvider {
         try {
             if (item) {
                 // Update existing item
-                console.log(`📝 Updating Bitwarden item ${itemPath}, field ${fieldName}...`);
+                console.log(`${EMOJI.UPDATING} Updating Bitwarden item ${itemPath}, field ${fieldName}...`);
                 
                 // Get full item data
                 const getResponse = await this.cli.run(`bw get item ${item.id} --session="${this.sessionKey}"`);
@@ -330,7 +355,7 @@ export class BitwardenProvider extends SecretProvider {
                 this.items = [];
             } else {
                 // Create new item
-                console.log(`🆕 Creating Bitwarden item ${itemPath}...`);
+                console.log(`${EMOJI.CREATING} Creating Bitwarden item ${itemPath}...`);
                 
                 const newItem: any = {
                     type: 1, // login type
@@ -376,10 +401,7 @@ export class BitwardenProvider extends SecretProvider {
                 this.items = [];
             }
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to write Bitwarden secret: ${error.message}`);
-            }
-            throw new Error('Failed to write Bitwarden secret: Unknown error');
+            this.wrapProviderError(error, 'write', 'Bitwarden');
         }
     }
 
@@ -416,7 +438,7 @@ export class BitwardenProvider extends SecretProvider {
         }
 
         try {
-            console.log(`🗑️  Deleting Bitwarden item ${itemPath}...`);
+            console.log(`${EMOJI.DELETING} Deleting Bitwarden item ${itemPath}...`);
             const deleteResponse = await this.cli.run(`bw delete item ${item.id} --session="${this.sessionKey}"`);
             
             if (deleteResponse.state !== 'ok') {
@@ -425,10 +447,7 @@ export class BitwardenProvider extends SecretProvider {
             
             this.items = [];
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                throw new Error(`Failed to delete Bitwarden secret: ${error.message}`);
-            }
-            throw new Error('Failed to delete Bitwarden secret: Unknown error');
+            this.wrapProviderError(error, 'delete', 'Bitwarden');
         }
     }
 

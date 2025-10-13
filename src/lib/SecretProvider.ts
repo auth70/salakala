@@ -200,6 +200,62 @@ export abstract class SecretProvider {
         // as we might be looking for an object structure.
         return current;
     }
+
+    /**
+     * Wraps provider errors with consistent formatting.
+     * Re-throws errors that are from our own validation (contain 'Key', 'JSON', or 'empty').
+     * Wraps external provider errors with context.
+     * 
+     * @param {unknown} error - The error to wrap
+     * @param {string} operation - Operation being performed (e.g., 'read', 'write', 'delete')
+     * @param {string} providerName - Name of the provider (e.g., '1Password', 'AWS Secrets Manager')
+     * @returns {never} Always throws
+     */
+    protected wrapProviderError(error: unknown, operation: string, providerName: string): never {
+        if (error instanceof Error) {
+            // Re-throw our own validation errors unchanged
+            if (error.message.includes('Key') || 
+                error.message.includes('JSON') || 
+                error.message.includes('empty')) {
+                throw error;
+            }
+            // Wrap provider errors with context
+            throw new Error(`Failed to ${operation} ${providerName} secret: ${error.message}`);
+        }
+        throw new Error(`Failed to ${operation} ${providerName} secret: Unknown error`);
+    }
+
+    /**
+     * Parses a path component using a regex pattern and validates format.
+     * 
+     * @param {string} path - The path component to parse
+     * @param {RegExp} pattern - Regex pattern to match against
+     * @param {string} expectedFormat - Human-readable description of expected format for error messages
+     * @returns {RegExpMatchArray} The regex match array
+     * @throws {Error} If the path doesn't match the expected format
+     */
+    protected parsePathWithRegex(path: string, pattern: RegExp, expectedFormat: string): RegExpMatchArray {
+        const match = path.match(pattern);
+        if (!match) {
+            throw new Error(`Invalid path format. Expected: ${expectedFormat}`);
+        }
+        return match;
+    }
+
+    /**
+     * Generic client caching for providers that need to maintain client instances.
+     * 
+     * @param {Map<string, T>} cache - The cache map to use
+     * @param {string} key - Cache key
+     * @param {() => T} factory - Factory function to create new client if not cached
+     * @returns {T} The cached or newly created client
+     */
+    protected getOrCreateClient<T>(cache: Map<string, T>, key: string, factory: () => T): T {
+        if (!cache.has(key)) {
+            cache.set(key, factory());
+        }
+        return cache.get(key)!;
+    }
 }
 
 /**
