@@ -23,7 +23,8 @@ describe('GoogleCloudSecretsProvider', () => {
             try {
                 await provider.deleteSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`);
             } catch (error) {
-                // Ignore errors during cleanup
+                console.error('Error deleting Google Cloud secret', error);
+                // Continue with cleanup even if deletion fails
             }
         }
         createdSecrets.length = 0;

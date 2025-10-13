@@ -79,7 +79,7 @@ async function promptForEnvironment(environments: string[]): Promise<string> {
     });
 }
 
-const PACKAGE_VERSION = '1.3.0';
+const PACKAGE_VERSION = '1.3.2';
 
 program
     .name('salakala')
@@ -229,22 +229,53 @@ program
 program
     .command('import')
     .description('Import environment variables from .env file to secret provider')
-    .option('-i, --input <file>', 'input .env file path', '.env')
+    .option('-i, --input <file>', 'input .env file path')
     .action(async (options) => {
         try {
             const manager = new SecretsManager();
             
-            // Step 1: Read and parse .env file
+            // Step 1: Determine input source and parse
             let envVars: Record<string, string>;
-            if (existsSync(options.input)) {
-                const content = readFileSync(options.input, 'utf-8');
-                envVars = parseEnvContent(content);
+            
+            if (options.input) {
+                // File path was explicitly provided
+                if (existsSync(options.input)) {
+                    const content = readFileSync(options.input, 'utf-8');
+                    envVars = parseEnvContent(content);
+                } else {
+                    console.log(`File '${options.input}' not found.`);
+                    const pastedContent = await input({
+                        message: 'Paste your environment variables (press Ctrl+D when done):',
+                    });
+                    envVars = parseEnvContent(pastedContent);
+                }
             } else {
-                console.log(`File '${options.input}' not found.`);
-                const pastedContent = await input({
-                    message: 'Paste your environment variables (press Ctrl+D when done):',
+                // No input specified, ask user
+                const inputMethod = await select({
+                    message: 'How would you like to provide environment variables?',
+                    choices: [
+                        { name: 'Read from .env file', value: 'file' },
+                        { name: 'Paste variables', value: 'paste' }
+                    ]
                 });
-                envVars = parseEnvContent(pastedContent);
+
+                if (inputMethod === 'file') {
+                    if (existsSync('.env')) {
+                        const content = readFileSync('.env', 'utf-8');
+                        envVars = parseEnvContent(content);
+                    } else {
+                        console.log('File .env not found.');
+                        const pastedContent = await input({
+                            message: 'Paste your environment variables (press Ctrl+D when done):',
+                        });
+                        envVars = parseEnvContent(pastedContent);
+                    }
+                } else {
+                    const pastedContent = await input({
+                        message: 'Paste your environment variables (press Ctrl+D when done):',
+                    });
+                    envVars = parseEnvContent(pastedContent);
+                }
             }
 
             if (Object.keys(envVars).length === 0) {

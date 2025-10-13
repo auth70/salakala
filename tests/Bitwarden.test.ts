@@ -23,7 +23,7 @@ describe('BitwardenProvider', () => {
                 await provider.deleteSecret(itemPath);
             } catch (error) {
                 console.error('Error deleting Bitwarden item', error);
-                // Ignore errors during cleanup
+                // Continue with cleanup even if deletion fails
             }
         }
         createdItems.length = 0;

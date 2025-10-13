@@ -26,7 +26,7 @@ describe('OnePasswordProvider', () => {
                 await new Promise(resolve => setTimeout(resolve, 2000));
             } catch (error) {
                 console.error('Error deleting 1Password item', error);
-                // Ignore errors during cleanup
+                // Continue with cleanup even if deletion fails
             }
         }
         createdItems.length = 0;
@@ -42,39 +42,22 @@ describe('OnePasswordProvider', () => {
             .toThrow('Invalid 1Password secret path');
     });
 
-    it('should retrieve JSON secret with :: syntax', async () => {
-        const itemName = generateTestId('test-json-syntax');
+    it('should handle JSON secrets with :: syntax for key extraction', async () => {
+        const itemName = generateTestId('test-json-extraction');
         const path = `op://testing/${itemName}/notes`;
         createdItems.push(path);
         
         await provider.setSecret(path, JSON.stringify(standardJsonData));
         
-        const result = await provider.getSecret(`${path}::key`);
-        expect(typeof result).toBe('string');
-        expect(result.length).toBeGreaterThan(0);
-        expect(result).toBe(standardJsonData.key);
-    }, 15000);
-
-    it('should retrieve nested JSON secret with :: syntax', async () => {
-        const itemName = generateTestId('test-nested-json');
-        const path = `op://testing/${itemName}/notes`;
-        createdItems.push(path);
+        // Test simple key extraction
+        const simpleKey = await provider.getSecret(`${path}::key`);
+        expect(simpleKey).toBe(standardJsonData.key);
         
-        await provider.setSecret(path, JSON.stringify(standardJsonData));
+        // Test nested key extraction
+        const nestedValue = await provider.getSecret(`${path}::nested.value`);
+        expect(nestedValue).toBe(standardJsonData.nested.value);
         
-        const result = await provider.getSecret(`${path}::nested.value`);
-        expect(typeof result).toBe('string');
-        expect(result.length).toBeGreaterThan(0);
-        expect(result).toBe(standardJsonData.nested.value);
-    }, 15000);
-
-    it('should throw on non-existent JSON key with :: syntax', async () => {
-        const itemName = generateTestId('test-missing-key');
-        const path = `op://testing/${itemName}/notes`;
-        createdItems.push(path);
-        
-        await provider.setSecret(path, JSON.stringify(standardJsonData));
-        
+        // Test non-existent key throws error
         await expect(provider.getSecret(`${path}::nonExistentKey`))
             .rejects
             .toThrow(/Key nonExistentKey not found in JSON object/);
@@ -219,13 +202,12 @@ describe('OnePasswordProvider', () => {
             }
         }, 20000);
 
-        it('should store and retrieve env vars as JSON bundle', async () => {
-            const itemName = generateTestId('test-import-json');
+        it('should store and retrieve JSON bundles with comprehensive field extraction', async () => {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const itemName = generateTestId('test-import-json-comprehensive');
             
-            // Parse test env content
-            const envVars = parseEnvContent(testEnvContent);
-            
-            // Create JSON bundle
+            // Parse test env content and merge with nested JSON data
+            const envVars = { ...parseEnvContent(testEnvContent), ...nestedJsonData };
             const jsonBundle = JSON.stringify(envVars);
             const bundlePath = provider.buildPath(
                 { vault: 'testing', item: itemName },
@@ -233,171 +215,101 @@ describe('OnePasswordProvider', () => {
             );
             createdItems.push(bundlePath);
             
-            // Store bundle
             await provider.setSecret(bundlePath, jsonBundle);
             
-            // Retrieve and verify
+            // Test 1: Retrieve entire bundle
             const retrieved = await provider.getSecret(bundlePath);
             const parsed = JSON.parse(retrieved);
-            
             expect(parsed.SIMPLE_VALUE).toBe(expectedParsedValues.SIMPLE_VALUE);
             expect(parsed.DATABASE_URL).toBe(expectedParsedValues.DATABASE_URL);
             expect(parsed.ENCODED_VALUE).toBe(expectedParsedValues.ENCODED_VALUE);
             
-            // Verify nested JSON survived the round-trip
-            const jsonConfig = JSON.parse(parsed.JSON_CONFIG);
-            expect(jsonConfig.database.host).toBe('localhost');
-            expect(jsonConfig.api.endpoint).toBe('https://api.example.com/v1');
-        }, 20000);
-
-        it('should retrieve specific fields from JSON bundle using :: syntax', async () => {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const itemName = generateTestId('test-import-json-field');
-            
-            const envVars = parseEnvContent(testEnvContent);
-            const jsonBundle = JSON.stringify(envVars);
-            const bundlePath = provider.buildPath(
-                { vault: 'testing', item: itemName },
-                { fieldName: 'config' }
-            );
-            createdItems.push(bundlePath);
-            
-            await provider.setSecret(bundlePath, jsonBundle);
-            
-            // Retrieve specific fields using :: syntax
+            // Test 2: Extract specific fields using :: syntax
             const simpleValue = await provider.getSecret(`${bundlePath}::SIMPLE_VALUE`);
-            const dbUrl = await provider.getSecret(`${bundlePath}::DATABASE_URL`);
-            const jsonConfig = await provider.getSecret(`${bundlePath}::JSON_CONFIG`);
-            
             expect(simpleValue).toBe(expectedParsedValues.SIMPLE_VALUE);
+            
+            const dbUrl = await provider.getSecret(`${bundlePath}::DATABASE_URL`);
             expect(dbUrl).toBe(expectedParsedValues.DATABASE_URL);
             
-            // Verify nested JSON is still valid
-            const parsed = JSON.parse(jsonConfig);
-            expect(parsed.database.host).toBe('localhost');
-        }, 20000);
-
-        it('should handle JSON inside JSON bundle', async () => {
-            const itemName = generateTestId('test-import-nested-json');
+            // Test 3: Extract and verify nested JSON
+            const jsonConfigStr = await provider.getSecret(`${bundlePath}::JSON_CONFIG`);
+            const jsonConfig = JSON.parse(jsonConfigStr);
+            expect(jsonConfig.database.host).toBe('localhost');
+            expect(jsonConfig.api.endpoint).toBe('https://api.example.com/v1');
             
-            const jsonBundle = JSON.stringify(nestedJsonData);
-            const bundlePath = provider.buildPath(
-                { vault: 'testing', item: itemName },
-                { fieldName: 'data' }
-            );
-            createdItems.push(bundlePath);
-            
-            await provider.setSecret(bundlePath, jsonBundle);
-            
-            // Retrieve the outer JSON field
+            // Test 4: Handle JSON inside JSON bundle
             const outerJson = await provider.getSecret(`${bundlePath}::OUTER_JSON`);
-            expect(typeof outerJson).toBe('string');
-            
-            // Parse and verify the inner structure
-            const parsed = JSON.parse(outerJson);
-            expect(parsed.inner.nested).toBe('value');
-            expect(parsed.array).toEqual([1, 2, 3]);
-        }, 20000);
+            const nestedParsed = JSON.parse(outerJson);
+            expect(nestedParsed.inner.nested).toBe('value');
+            expect(nestedParsed.array).toEqual([1, 2, 3]);
+        }, 25000);
     });
 
     describe('Import integration: Individual fields storage', () => {
-        it('should store and retrieve multiple fields in one item', async () => {
+        it('should store and retrieve fields (simple, sectioned, and JSON values)', async () => {
             await new Promise(resolve => setTimeout(resolve, 1000));
-            const itemName = generateTestId('test-import-fields');
+            const itemName = generateTestId('test-import-fields-comprehensive');
+            createdItems.push(`op://testing/${itemName}/password`);
             
-            const testVars = simpleTestVars;
-            
-            // Store each var as a separate field
-            for (const [key, value] of Object.entries(testVars)) {
+            // Store simple fields
+            for (const [key, value] of Object.entries(simpleTestVars)) {
                 const path = provider.buildPath(
                     { vault: 'testing', item: itemName },
                     { fieldName: key }
                 );
-                if (key === Object.keys(testVars)[0]) {
-                    createdItems.push(`op://testing/${itemName}/password`); // For cleanup
-                }
                 await provider.setSecret(path, value);
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
-            
-            // Retrieve and verify each field
-            for (const [key, expectedValue] of Object.entries(testVars)) {
-                const path = provider.buildPath(
-                    { vault: 'testing', item: itemName },
-                    { fieldName: key }
-                );
-                const retrieved = await provider.getSecret(path);
-                expect(retrieved).toBe(expectedValue);
-            }
-        }, 20000);
-
-        it('should store fields with sections', async () => {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const itemName = generateTestId('test-import-sections');
-            
-            const testVars = simpleTestVars;
             
             // Store fields in a section
-            for (const [key, value] of Object.entries(testVars)) {
+            for (const [key, value] of Object.entries({ SEC_KEY: 'sectioned-value' })) {
                 const path = provider.buildPath(
                     { vault: 'testing', item: itemName, section: 'credentials' },
                     { fieldName: key }
                 );
-                if (key === Object.keys(testVars)[0]) {
-                    createdItems.push(`op://testing/${itemName}/password`);
-                }
                 await provider.setSecret(path, value);
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
             
-            // Retrieve and verify
-            for (const [key, expectedValue] of Object.entries(testVars)) {
+            // Store JSON values as fields
+            for (const [key, value] of Object.entries(jsonTestVars)) {
                 const path = provider.buildPath(
-                    { vault: 'testing', item: itemName, section: 'credentials' },
+                    { vault: 'testing', item: itemName },
+                    { fieldName: `JSON_${key}` }
+                );
+                await provider.setSecret(path, value);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            // Retrieve and verify simple fields
+            for (const [key, expectedValue] of Object.entries(simpleTestVars)) {
+                const path = provider.buildPath(
+                    { vault: 'testing', item: itemName },
                     { fieldName: key }
                 );
                 const retrieved = await provider.getSecret(path);
                 expect(retrieved).toBe(expectedValue);
             }
-        }, 20000);
-
-        it('should store JSON values as individual fields', async () => {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const itemName = generateTestId('test-import-json-fields');
             
-            const testVars = jsonTestVars;
+            // Verify sectioned field
+            const sectionPath = provider.buildPath(
+                { vault: 'testing', item: itemName, section: 'credentials' },
+                { fieldName: 'SEC_KEY' }
+            );
+            const sectionValue = await provider.getSecret(sectionPath);
+            expect(sectionValue).toBe('sectioned-value');
             
-            // Store JSON values as separate fields
-            for (const [key, value] of Object.entries(testVars)) {
+            // Verify JSON fields
+            for (const [key, expectedValue] of Object.entries(jsonTestVars)) {
                 const path = provider.buildPath(
                     { vault: 'testing', item: itemName },
-                    { fieldName: key }
-                );
-                if (key === Object.keys(testVars)[0]) {
-                    createdItems.push(`op://testing/${itemName}/password`);
-                }
-                await provider.setSecret(path, value);
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            
-            // Retrieve and verify JSON is still valid
-            // Note: 1Password may strip quotes from JSON when storing in fields,
-            // so we parse it flexibly
-            for (const [key, expectedValue] of Object.entries(testVars)) {
-                const path = provider.buildPath(
-                    { vault: 'testing', item: itemName },
-                    { fieldName: key }
+                    { fieldName: `JSON_${key}` }
                 );
                 const retrieved = await provider.getSecret(path);
-                
-                // Verify it parses correctly (might have stripped quotes)
                 const parsed = JSON.parse(retrieved);
-                expect(parsed).toBeDefined();
-                
-                // Verify structure is preserved
-                const expected = JSON.parse(expectedValue);
-                expect(parsed).toEqual(expected);
+                const expectedParsed = JSON.parse(expectedValue);
+                expect(parsed).toEqual(expectedParsed);
             }
-        }, 20000);
+        }, 40000);
     });
 }); 

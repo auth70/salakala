@@ -46,12 +46,19 @@ Create a `salakala.json` configuration file in your project root, then run salak
 ### Basic Commands
 
 ```bash
-salakala                    # Generate .env file in current directory
+salakala                    # Generate .env file from salakala.json
 salakala -s                 # Export variables to current shell
 salakala -e staging         # Use specific environment configuration
 salakala -i config.json     # Use alternative input file
 salakala -o .env.local      # Write to alternative output file
 salakala -w                 # Overwrite existing file instead of merging
+
+salakala import             # Import variables to secret provider (interactive)
+salakala import -i .env.prod # Import from specific file
+
+salakala sync               # Synchronize secrets between providers
+salakala sync --dry-run     # Preview sync without writing
+
 salakala --help             # Show help
 ```
 
@@ -200,7 +207,7 @@ Synchronize secrets across multiple providers using `src` and `dst` configuratio
 - `dst`: Destination provider URIs for writing secrets (supports multiple destinations per secret)
 - Only secrets defined in `dst` will be synchronized
 
-### Commands
+### Sync Commands
 
 ```bash
 salakala sync                # Sync all secrets in dst
@@ -210,7 +217,7 @@ salakala sync --dry-run      # Preview changes without writing
 salakala sync -y             # Skip prompts and overwrite (for CI/automation)
 ```
 
-### Conflict Resolution
+#### Conflict Resolution
 
 When a secret exists at the destination, you will be prompted unless using the `-y` flag:
 
@@ -221,6 +228,115 @@ When a secret exists at the destination, you will be prompted unless using the `
 - **Q** - Quit synchronization
 
 Use `salakala sync -y` in CI/CD pipelines to automatically overwrite without prompts.
+
+## Importing from .env Files
+
+Import existing environment variables from `.env` files into secret providers. The interactive wizard guides you through selecting variables, choosing a provider, and configuring storage.
+
+### Import Command
+
+```bash
+salakala import              # Interactive wizard (prompts for file or paste)
+salakala import -i .env.prod # Import from specific file
+```
+
+You will be walked through the import process.
+
+### Storage Modes
+
+<details>
+<summary><b>JSON Bundle Storage (Recommended)</b></summary>
+
+Stores all variables as JSON in a single secret field. Ideal for providers supporting multiple fields (1Password, Bitwarden, KeePass, LastPass).
+
+**Advantages:**
+- Fewer secrets to manage
+- Atomic updates
+- Better organization
+- Reduced API calls
+
+**Example output:**
+```json
+{
+  "production": {
+    "src": {
+      "API_KEY": "op://vault/app-config/config::API_KEY",
+      "DATABASE_URL": "op://vault/app-config/config::DATABASE_URL",
+      "SECRET_KEY": "op://vault/app-config/config::SECRET_KEY"
+    },
+    "dst": {}
+  }
+}
+```
+
+The JSON bundle is stored in `op://vault/app-config/config` and individual fields are extracted using `::` syntax.
+
+</details>
+
+<details>
+<summary><b>Individual Fields/Secrets</b></summary>
+
+Stores each variable as a separate field (1Password, Bitwarden, etc.) or separate secret (AWS, GCP, etc.).
+
+**Advantages:**
+- Granular access control per secret
+- Independent versioning
+- Works with all providers
+
+**Example output (multi-field provider):**
+```json
+{
+  "production": {
+    "src": {
+      "API_KEY": "op://vault/app-config/API_KEY",
+      "DATABASE_URL": "op://vault/app-config/DATABASE_URL"
+    },
+    "dst": {}
+  }
+}
+```
+
+**Example output (single-value provider):**
+```json
+{
+  "production": {
+    "src": {
+      "API_KEY": "awssm://us-east-1/prod/API_KEY",
+      "DATABASE_URL": "awssm://us-east-1/prod/DATABASE_URL"
+    },
+    "dst": {}
+  }
+}
+```
+
+</details>
+
+### Example Workflow
+
+```bash
+# Import production secrets from .env.production
+salakala import -i .env.production
+
+# Interactive prompts:
+# ✓ Select variables: [x] DATABASE_URL [x] API_KEY [x] SECRET_KEY
+# ✓ Provider: 1Password (op://)
+# ✓ Vault: production-vault
+# ✓ Item: app-secrets
+# ✓ Store as JSON? Yes
+# ✓ Field name: config
+# ✓ Environment: production
+
+# Creates salakala.json and writes secrets to 1Password
+# Use the generated config:
+salakala -e production
+```
+
+### Tips
+
+- JSON bundle storage is recommended for better organization and fewer API calls
+- For cloud providers (AWS, GCP), JSON bundle creates one secret with all variables
+- Use `dst` configuration later to sync imported secrets to other providers
+- The import wizard validates all inputs before writing
 
 ## Providers
 
