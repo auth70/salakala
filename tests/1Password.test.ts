@@ -84,28 +84,35 @@ describe('OnePasswordProvider', () => {
 
     describe('Write operations', () => {
         it('should write a secret to 1Password', async () => {
-            const testValue = `test-value-${Date.now()}`;
-            createdItems.push('op://testing/test-write-item/password');
+            const timestamp = Date.now();
+            const itemName = `test-write-item-${timestamp}`;
+            const testValue = `test-value-${timestamp}`;
+            createdItems.push(`op://testing/${itemName}/password`);
             
-            await provider.setSecret('op://testing/test-write-item/password', testValue);
+            await provider.setSecret(`op://testing/${itemName}/password`, testValue);
             
-            const retrievedValue = await provider.getSecret('op://testing/test-write-item/password');
+            const retrievedValue = await provider.getSecret(`op://testing/${itemName}/password`);
             expect(retrievedValue).toBe(testValue);
         }, 15000);
 
         it('should update an existing secret', async () => {
-            const initialValue = `initial-${Date.now()}`;
-            const updatedValue = `updated-${Date.now()}`;
-            createdItems.push('op://testing/test-update-item/password');
+            const timestamp = Date.now();
+            const itemName = `test-update-item-${timestamp}`;
+            const initialValue = `initial-${timestamp}`;
+            const updatedValue = `updated-${timestamp}`;
+            createdItems.push(`op://testing/${itemName}/password`);
             
-            await provider.setSecret('op://testing/test-update-item/password', initialValue);
-            const firstRead = await provider.getSecret('op://testing/test-update-item/password');
+            await provider.setSecret(`op://testing/${itemName}/password`, initialValue);
+            const firstRead = await provider.getSecret(`op://testing/${itemName}/password`);
             expect(firstRead).toBe(initialValue);
             
-            await provider.setSecret('op://testing/test-update-item/password', updatedValue);
-            const secondRead = await provider.getSecret('op://testing/test-update-item/password');
+            // Add small delay to avoid 409 conflicts from rapid updates
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await provider.setSecret(`op://testing/${itemName}/password`, updatedValue);
+            const secondRead = await provider.getSecret(`op://testing/${itemName}/password`);
             expect(secondRead).toBe(updatedValue);
-        }, 15000);
+        }, 20000);
 
         it('should throw error for invalid write path', async () => {
             await expect(provider.setSecret('invalid-path', 'value'))
@@ -120,13 +127,20 @@ describe('OnePasswordProvider', () => {
         });
 
         it('should delete a secret', async () => {
-            const testValue = 'value-to-delete';
-            await provider.setSecret('op://testing/test-delete-item/password', testValue);
-            await provider.deleteSecret('op://testing/test-delete-item/password');
+            const timestamp = Date.now();
+            const itemName = `test-delete-item-${timestamp}`;
+            const testValue = `value-to-delete-${timestamp}`;
             
-            await expect(provider.getSecret('op://testing/test-delete-item/password'))
+            await provider.setSecret(`op://testing/${itemName}/password`, testValue);
+            
+            // Add small delay to ensure item is fully created before deletion
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await provider.deleteSecret(`op://testing/${itemName}/password`);
+            
+            await expect(provider.getSecret(`op://testing/${itemName}/password`))
                 .rejects
                 .toThrow();
-        }, 15000);
+        }, 20000);
     });
 }); 

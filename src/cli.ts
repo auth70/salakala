@@ -84,7 +84,7 @@ async function promptForEnvironment(environments: string[]): Promise<string> {
     return selectedEnvironment;
 }
 
-const PACKAGE_VERSION = '1.2.1';
+const PACKAGE_VERSION = '1.2.4';
 
 program
     .name('salakala')

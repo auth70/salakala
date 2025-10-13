@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SyncManager } from '../src/lib/SyncManager.js';
 import { OnePasswordProvider } from '../src/lib/providers/1Password.js';
 import { GoogleCloudSecretsProvider } from '../src/lib/providers/GoogleCloudSecrets.js';
@@ -9,6 +9,7 @@ describe('SyncManager', () => {
     let syncManager: SyncManager;
     let providers: Map<string, SecretProvider>;
     let projectId: string;
+    const createdSecrets: string[] = [];
 
     beforeEach(() => {
         if (!process.env.OP_SERVICE_ACCOUNT_TOKEN) {
@@ -26,6 +27,18 @@ describe('SyncManager', () => {
         ]);
 
         syncManager = new SyncManager(providers);
+    });
+
+    afterEach(async () => {
+        const gcpProvider = providers.get('gcsm://')!;
+        for (const secretId of createdSecrets) {
+            try {
+                await gcpProvider.deleteSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`);
+            } catch (error) {
+                // Ignore errors during cleanup
+            }
+        }
+        createdSecrets.length = 0;
     });
 
     describe('Config detection', () => {
@@ -92,6 +105,7 @@ describe('SyncManager', () => {
         it('should sync a single secret from 1Password to Google Cloud', async () => {
             const timestamp = Date.now();
             const secretId = `test-sync-single-${timestamp}`;
+            createdSecrets.push(secretId);
             
             const syncConfig = {
                 src: {
@@ -117,6 +131,7 @@ describe('SyncManager', () => {
             const timestamp = Date.now();
             const secretId1 = `test-sync-multi-1-${timestamp}`;
             const secretId2 = `test-sync-multi-2-${timestamp}`;
+            createdSecrets.push(secretId1, secretId2);
             
             const syncConfig = {
                 src: {
@@ -171,6 +186,8 @@ describe('SyncManager', () => {
             const timestamp = Date.now();
             const secretId1 = `test-sync-specific-1-${timestamp}`;
             const secretId2 = `test-sync-specific-2-${timestamp}`;
+            createdSecrets.push(secretId1);
+            // Note: secretId2 is not created, so we don't add it to cleanup
             
             const syncConfig = {
                 src: {
