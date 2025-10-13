@@ -5,7 +5,8 @@ import { SecretsManager } from './lib/SecretsManager.js';
 import { SyncManager } from './lib/SyncManager.js';
 import { program } from '@commander-js/extra-typings';
 import { escapeEnvValue } from './lib/envEscape.js';
-import inquirer from 'inquirer';
+import { select, checkbox, input, confirm } from '@inquirer/prompts';
+import { parseEnvContent, truncateValueForDisplay, generateConfig } from './lib/ImportUtils.js';
 
 /**
  * Resolves the input file path with smart fallback logic.
@@ -72,19 +73,13 @@ function detectEnvironments(configPath: string): string[] | null {
  * @returns {Promise<string>} Selected environment
  */
 async function promptForEnvironment(environments: string[]): Promise<string> {
-    const { selectedEnvironment } = await inquirer.prompt([
-        {
-            type: 'list',
-            name: 'selectedEnvironment',
-            message: 'Select an environment:',
-            choices: environments,
-            loop: false
-        }
-    ]);
-    return selectedEnvironment;
+    return await select({
+        message: 'Select an environment:',
+        choices: environments.map(env => ({ value: env }))
+    });
 }
 
-const PACKAGE_VERSION = '1.2.4';
+const PACKAGE_VERSION = '1.3.0';
 
 program
     .name('salakala')
@@ -225,6 +220,276 @@ program
             if (hasFailures) {
                 process.exit(1);
             }
+        } catch (error) {
+            console.error('Error:', error instanceof Error ? error.message : String(error));
+            process.exit(1);
+        }
+    });
+
+program
+    .command('import')
+    .description('Import environment variables from .env file to secret provider')
+    .option('-i, --input <file>', 'input .env file path', '.env')
+    .action(async (options) => {
+        try {
+            const manager = new SecretsManager();
+            
+            // Step 1: Read and parse .env file
+            let envVars: Record<string, string>;
+            if (existsSync(options.input)) {
+                const content = readFileSync(options.input, 'utf-8');
+                envVars = parseEnvContent(content);
+            } else {
+                console.log(`File '${options.input}' not found.`);
+                const pastedContent = await input({
+                    message: 'Paste your environment variables (press Ctrl+D when done):',
+                });
+                envVars = parseEnvContent(pastedContent);
+            }
+
+            if (Object.keys(envVars).length === 0) {
+                console.log('No environment variables found.');
+                return;
+            }
+
+            // Step 2: Multi-select variables to import
+            const selectedVars = await checkbox({
+                message: 'Select environment variables to import:',
+                choices: Object.entries(envVars).map(([key, value]) => ({
+                    name: `${key} = ${truncateValueForDisplay(value)}`,
+                    value: key
+                }))
+            });
+
+            if (selectedVars.length === 0) {
+                console.log('No variables selected.');
+                return;
+            }
+
+            // Step 3: Select provider
+            const providerEntries = Array.from(manager.getProviders().entries());
+            const providerPrefix = await select({
+                message: 'Select secret provider:',
+                choices: providerEntries.map(([prefix, provider]) => {
+                    const names: Record<string, string> = {
+                        'op://': '1Password',
+                        'bw://': 'Bitwarden',
+                        'awssm://': 'AWS Secrets Manager',
+                        'gcsm://': 'Google Cloud Secret Manager',
+                        'azurekv://': 'Azure Key Vault',
+                        'kp://': 'KeePass',
+                        'lp://': 'LastPass'
+                    };
+                    return {
+                        name: `${names[prefix] || prefix} (${prefix})`,
+                        value: prefix
+                    };
+                })
+            });
+
+            const provider = manager.getProviders().get(providerPrefix)!;
+
+            // Show provider capability
+            if (provider.supportsMultipleFields) {
+                console.log('\nℹ️  This provider supports multiple fields per item.');
+            } else {
+                console.log('\n⚠️  This provider stores one value per secret.');
+            }
+
+            // Step 4: Collect path components
+            const components: Record<string, string> = {};
+            for (const component of provider.pathComponents) {
+                const value = await input({
+                    message: component.description + (component.required ? ' (required)' : ' (optional)'),
+                    default: component.default,
+                    validate: (val) => {
+                        if (component.required && !val.trim()) {
+                            return 'This field is required';
+                        }
+                        return true;
+                    }
+                });
+                
+                if (value.trim()) {
+                    components[component.name] = value.trim();
+                }
+            }
+
+            // Step 5: Determine storage mode
+            let storeAsJson = false;
+            let jsonFieldName = '';
+            
+            if (provider.supportsMultipleFields) {
+                storeAsJson = await confirm({
+                    message: 'Store all variables as JSON in a single field?',
+                    default: false
+                });
+
+                if (storeAsJson) {
+                    jsonFieldName = await input({
+                        message: 'Field name for JSON data:',
+                        default: 'config'
+                    });
+                }
+            } else {
+                storeAsJson = await confirm({
+                    message: 'Store as a single JSON secret? (otherwise creates separate secrets per variable)',
+                    default: false
+                });
+            }
+
+            // Step 6: Get environment name
+            const environment = await input({
+                message: 'Environment name (leave empty for flat config):',
+                default: ''
+            });
+
+            // Step 7: Preview and confirm
+            console.log('\n📋 Preview of items to create:');
+            console.log(`  Provider: ${providerPrefix.slice(0, -3)} (${providerPrefix})`);
+            console.log(`  Variables: ${selectedVars.length}`);
+            if (storeAsJson) {
+                console.log(`  Storage: JSON bundle in field "${jsonFieldName}"`);
+                console.log(`  Item: ${components.item || components.entry || 'N/A'}`);
+            } else if (provider.supportsMultipleFields) {
+                console.log(`  Storage: ${selectedVars.length} separate fields`);
+                console.log(`  Item: ${components.item || components.entry}`);
+            } else {
+                console.log(`  Storage: ${selectedVars.length} separate secrets`);
+            }
+            console.log(`  Selected variables: ${selectedVars.join(', ')}`);
+
+            const confirmCreate = await confirm({
+                message: '\nProceed with creating these items?',
+                default: true
+            });
+
+            if (!confirmCreate) {
+                console.log('Import cancelled.');
+                return;
+            }
+
+            // Step 8: Write secrets to provider
+            console.log('\n📝 Writing secrets to provider...');
+            const providerPaths: Record<string, string> = {};
+            const createdPaths: string[] = [];
+
+            try {
+                if (storeAsJson) {
+                    // Store as JSON
+                    const jsonValue = JSON.stringify(
+                        Object.fromEntries(selectedVars.map(key => [key, envVars[key]]))
+                    );
+                    
+                    const path = provider.buildPath(components, { 
+                        fieldName: jsonFieldName
+                    });
+                    
+                    await provider.setSecret(path, jsonValue);
+                    createdPaths.push(path);
+                    console.log(`✅ Stored ${selectedVars.length} variables as JSON at ${path}`);
+                    
+                    // Generate paths with JSON field access
+                    for (const varName of selectedVars) {
+                        providerPaths[varName] = `${path}::${varName}`;
+                    }
+                } else if (provider.supportsMultipleFields) {
+                    // Store as separate fields in one item
+                    for (const varName of selectedVars) {
+                        const path = provider.buildPath(components, { fieldName: varName });
+                        await provider.setSecret(path, envVars[varName]);
+                        createdPaths.push(path);
+                        providerPaths[varName] = path;
+                    }
+                    console.log(`✅ Stored ${selectedVars.length} fields in item '${components.item || components.entry}'`);
+                } else {
+                    // Store as separate secrets (single-field provider)
+                    for (const varName of selectedVars) {
+                        const secretComponents = { ...components, secret: varName };
+                        const path = provider.buildPath(secretComponents);
+                        await provider.setSecret(path, envVars[varName]);
+                        createdPaths.push(path);
+                        providerPaths[varName] = path;
+                    }
+                    console.log(`✅ Created ${selectedVars.length} separate secrets`);
+                }
+
+                // Verify with user
+                const looksGood = await confirm({
+                    message: '\nDoes everything look OK?',
+                    default: true
+                });
+
+                if (!looksGood) {
+                    const cleanup = await confirm({
+                        message: 'Delete the items that were just created?',
+                        default: true
+                    });
+
+                    if (cleanup) {
+                        console.log('\n🗑️  Cleaning up created items...');
+                        for (const path of createdPaths) {
+                            try {
+                                await provider.deleteSecret(path);
+                                console.log(`  Deleted: ${path}`);
+                            } catch (error) {
+                                console.error(`  Failed to delete ${path}:`, error instanceof Error ? error.message : String(error));
+                            }
+                        }
+                        console.log('Cleanup complete.');
+                    }
+                    console.log('Import cancelled.');
+                    return;
+                }
+
+            } catch (error) {
+                console.error('\n❌ Error writing secrets:', error instanceof Error ? error.message : String(error));
+                process.exit(1);
+            }
+
+            // Step 9: Generate configuration
+            const config = generateConfig({
+                selectedVars,
+                envVars,
+                providerPaths,
+                environment: environment || undefined
+            });
+
+            console.log('\n📄 Generated configuration:');
+            console.log(JSON.stringify(config, null, 2));
+
+            // Step 10: Save configuration
+            const shouldSave = await confirm({
+                message: '\nSave configuration to file?',
+                default: true
+            });
+
+            if (shouldSave) {
+                let filename = await input({
+                    message: 'Configuration filename:',
+                    default: 'salakala.json'
+                });
+
+                while (existsSync(filename)) {
+                    const overwrite = await confirm({
+                        message: `File '${filename}' already exists. Overwrite?`,
+                        default: false
+                    });
+
+                    if (overwrite) {
+                        break;
+                    }
+
+                    filename = await input({
+                        message: 'Configuration filename:',
+                        default: 'salakala.json'
+                    });
+                }
+
+                writeFileSync(filename, JSON.stringify(config, null, 2) + '\n');
+                console.log(`✅ Configuration saved to ${filename}`);
+            }
+
         } catch (error) {
             console.error('Error:', error instanceof Error ? error.message : String(error));
             process.exit(1);

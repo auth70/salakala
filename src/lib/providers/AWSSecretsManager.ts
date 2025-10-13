@@ -1,4 +1,4 @@
-import { SecretProvider } from '../SecretProvider.js';
+import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { SecretsManager, CreateSecretCommand, PutSecretValueCommand, DeleteSecretCommand, ResourceExistsException } from '@aws-sdk/client-secrets-manager';
 import { execSync } from 'child_process';
 
@@ -17,6 +17,12 @@ import { execSync } from 'child_process';
  * @see {@link https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-secrets-manager/} for SDK documentation
  */
 export class AWSSecretsManagerProvider extends SecretProvider {
+    readonly supportsMultipleFields = false;
+    readonly pathComponents = [
+        { name: 'region', type: PathComponentType.Region, description: 'AWS region (e.g., us-east-1)', required: true },
+        { name: 'secret', type: PathComponentType.Item, description: 'Secret name', required: true },
+    ];
+
     /**
      * Cache of AWS Secrets Manager clients for different regions to avoid
      * recreating clients for the same region.
@@ -29,6 +35,11 @@ export class AWSSecretsManagerProvider extends SecretProvider {
     constructor() {
         super();
         this.clients = new Map();
+    }
+
+    buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
+        const { region, secret } = components;
+        return `awssm://${region}/${secret}`;
     }
 
     /**

@@ -72,6 +72,17 @@ function debug(opts: any, str: string) {
  */
 export class CliHandler {
     /**
+     * Escapes a value for safe use in shell commands wrapped in single quotes.
+     * Uses POSIX shell escaping: replace ' with '\'' 
+     * 
+     * @param {string} value - The value to escape
+     * @returns {string} The escaped value (without surrounding quotes)
+     */
+    escapeShellValue(value: string): string {
+        return value.replace(/'/g, "'\\''");
+    }
+
+    /**
      * Executes a CLI command with configurable options
      * @param command - The command to execute
      * @param options - Configuration options for command execution

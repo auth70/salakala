@@ -1,4 +1,4 @@
-import { SecretProvider } from '../SecretProvider.js';
+import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { CliHandler } from '../CliHandler.js';
 
 /**
@@ -14,6 +14,13 @@ import { CliHandler } from '../CliHandler.js';
  * @see {@link https://developer.1password.com/docs/cli/reference} for 1Password CLI documentation
  */
 export class OnePasswordProvider extends SecretProvider {
+    readonly supportsMultipleFields = true;
+    readonly pathComponents = [
+        { name: 'vault', type: PathComponentType.Vault, description: 'Vault name', required: true },
+        { name: 'item', type: PathComponentType.Item, description: 'Item name', required: true },
+        { name: 'section', type: PathComponentType.Section, description: 'Section name (optional)', required: false },
+    ];
+
     private sessionToken: string | null = null;
     private cli: CliHandler;
 
@@ -24,6 +31,16 @@ export class OnePasswordProvider extends SecretProvider {
         if (process.env.OP_SERVICE_ACCOUNT_TOKEN) {
             this.sessionToken = process.env.OP_SERVICE_ACCOUNT_TOKEN;
         }
+    }
+
+    buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
+        const { vault, item, section } = components;
+        const fieldName = opts?.fieldName || 'value';
+        
+        if (section) {
+            return `op://${vault}/${item}/${section}/${fieldName}`;
+        }
+        return `op://${vault}/${item}/${fieldName}`;
     }
 
     /**
@@ -112,11 +129,10 @@ export class OnePasswordProvider extends SecretProvider {
      * @private
      */
     private async getSecretValue(path: string, sessionToken?: string): Promise<string> {
-        const command = sessionToken 
-            ? `op read "${path}" --session="${sessionToken}"`
-            : `op read "${path}"`;
+        const command = `op read "${path}"`;
+        const envVars = sessionToken ? { OP_SESSION: sessionToken } : undefined;
 
-        const response = await this.cli.run(command);
+        const response = await this.cli.run(command, { env: envVars });
         if (response.state !== 'ok') {
             throw new Error(response.error?.message || response.message || 'Unable to read secret');
         }
@@ -167,28 +183,29 @@ export class OnePasswordProvider extends SecretProvider {
         }
 
         try {
-            const checkCommand = this.sessionToken
-                ? `op item get "${itemName}" --vault="${vaultName}" --session="${this.sessionToken}" --format=json`
-                : `op item get "${itemName}" --vault="${vaultName}" --format=json`;
-
-            const checkResponse = await this.cli.run(checkCommand);
+            const envVars = this.sessionToken ? { OP_SESSION: this.sessionToken } : undefined;
+            
+            const checkCommand = `op item get "${itemName}" --vault="${vaultName}" --format=json`;
+            const checkResponse = await this.cli.run(checkCommand, { env: envVars });
             
             if (checkResponse.state === 'ok') {
                 const fieldPath = sectionName ? `${sectionName}.${fieldName}` : fieldName;
-                const editCommand = this.sessionToken
-                    ? `op item edit "${itemName}" --vault="${vaultName}" "${fieldPath}=${value}" --session="${this.sessionToken}"`
-                    : `op item edit "${itemName}" --vault="${vaultName}" "${fieldPath}=${value}"`;
+                const escapedValue = this.cli.escapeShellValue(value);
+                const editCommand = `op item edit "${itemName}" --vault="${vaultName}" '${fieldPath}=${escapedValue}'`;
 
-                const editResponse = await this.cli.run(editCommand);
+                const editResponse = await this.cli.run(editCommand, { env: envVars });
                 if (editResponse.state !== 'ok') {
                     throw new Error(editResponse.error?.message || editResponse.message || 'Failed to update 1Password item');
                 }
             } else {
-                const createCommand = this.sessionToken
-                    ? `op item create --category=login --title="${itemName}" --vault="${vaultName}" "${fieldName}[password]=${value}" --session="${this.sessionToken}"`
-                    : `op item create --category=login --title="${itemName}" --vault="${vaultName}" "${fieldName}[password]=${value}"`;
+                const escapedValue = this.cli.escapeShellValue(value);
+                const fieldSpec = sectionName 
+                    ? `${sectionName}.${fieldName}[password]=${escapedValue}`
+                    : `${fieldName}[password]=${escapedValue}`;
+                
+                const createCommand = `op item create --category=login --title="${itemName}" --vault="${vaultName}" '${fieldSpec}'`;
 
-                const createResponse = await this.cli.run(createCommand);
+                const createResponse = await this.cli.run(createCommand, { env: envVars });
                 if (createResponse.state !== 'ok') {
                     throw new Error(createResponse.error?.message || createResponse.message || 'Failed to create 1Password item');
                 }
@@ -228,11 +245,10 @@ export class OnePasswordProvider extends SecretProvider {
 
         try {
             console.log(`🗑️  Deleting 1Password item ${itemName}...`);
-            const deleteCommand = this.sessionToken
-                ? `op item delete "${itemName}" --vault="${vaultName}" --session="${this.sessionToken}"`
-                : `op item delete "${itemName}" --vault="${vaultName}"`;
+            const envVars = this.sessionToken ? { OP_SESSION: this.sessionToken } : undefined;
+            const deleteCommand = `op item delete "${itemName}" --vault="${vaultName}"`;
 
-            const deleteResponse = await this.cli.run(deleteCommand);
+            const deleteResponse = await this.cli.run(deleteCommand, { env: envVars });
             if (deleteResponse.state !== 'ok') {
                 throw new Error(deleteResponse.error?.message || deleteResponse.message || 'Failed to delete 1Password item');
             }

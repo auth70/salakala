@@ -1,5 +1,4 @@
-import { execSync } from 'child_process';
-import { SecretProvider } from '../SecretProvider.js';
+import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { CliHandler } from '../CliHandler.js';
 import inquirer from 'inquirer';
 
@@ -41,6 +40,12 @@ type LastPassItem = {
  * @see {@link https://github.com/lastpass/lastpass-cli} for LastPass CLI documentation
  */
 export class LastPassProvider extends SecretProvider {
+    readonly supportsMultipleFields = true;
+    readonly pathComponents = [
+        { name: 'folder', type: PathComponentType.Folder, description: 'Folder path', required: true },
+        { name: 'item', type: PathComponentType.Item, description: 'Item name', required: true },
+    ];
+
     /**
      * Flag indicating whether we have successfully logged in in this session.
      * @private
@@ -52,6 +57,12 @@ export class LastPassProvider extends SecretProvider {
     constructor() {
         super();
         this.cli = new CliHandler();
+    }
+
+    buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
+        const { folder, item } = components;
+        const fieldName = opts?.fieldName || 'password';
+        return `lp://${folder}/${item}/${fieldName}`;
     }
 
     async checkLogin() {
@@ -232,30 +243,31 @@ test-folder/test [id: 6754388171590937865]
                 // Update existing item
                 console.log(`📝 Updating LastPass item ${itemName}, field ${fieldName}...`);
                 
-                // LastPass CLI doesn't have a direct field update, so we need to use edit with field specification
+                const escapedValue = this.cli.escapeShellValue(value);
+                
                 if (fieldName === 'password') {
-                    const editResponse = await this.cli.run(`lpass edit --non-interactive --password="${value}" "${itemName}"`);
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --password='${escapedValue}' "${itemName}"`);
                     if (editResponse.state !== 'ok') {
                         throw new Error(editResponse.message || 'Failed to update password');
                     }
                 } else if (fieldName === 'username') {
-                    const editResponse = await this.cli.run(`lpass edit --non-interactive --username="${value}" "${itemName}"`);
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --username='${escapedValue}' "${itemName}"`);
                     if (editResponse.state !== 'ok') {
                         throw new Error(editResponse.message || 'Failed to update username');
                     }
                 } else if (fieldName === 'url') {
-                    const editResponse = await this.cli.run(`lpass edit --non-interactive --url="${value}" "${itemName}"`);
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --url='${escapedValue}' "${itemName}"`);
                     if (editResponse.state !== 'ok') {
                         throw new Error(editResponse.message || 'Failed to update URL');
                     }
                 } else if (fieldName === 'note' || fieldName === 'notes') {
-                    const editResponse = await this.cli.run(`lpass edit --non-interactive --notes="${value}" "${itemName}"`);
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --notes='${escapedValue}' "${itemName}"`);
                     if (editResponse.state !== 'ok') {
                         throw new Error(editResponse.message || 'Failed to update notes');
                     }
                 } else {
-                    // For custom fields, we need to use --field
-                    const editResponse = await this.cli.run(`lpass edit --non-interactive --field="${fieldName}:${value}" "${itemName}"`);
+                    const escapedFieldValue = `${fieldName}:${escapedValue}`;
+                    const editResponse = await this.cli.run(`lpass edit --non-interactive --field='${escapedFieldValue}' "${itemName}"`);
                     if (editResponse.state !== 'ok') {
                         throw new Error(editResponse.message || `Failed to update field ${fieldName}`);
                     }
@@ -264,19 +276,22 @@ test-folder/test [id: 6754388171590937865]
                 // Create new item
                 console.log(`🆕 Creating LastPass item ${itemName}...`);
                 
+                const escapedValue = this.cli.escapeShellValue(value);
+                
                 // Build the add command based on field type
                 let addCommand = `lpass add --non-interactive "${itemName}"`;
                 
                 if (fieldName === 'password') {
-                    addCommand += ` --password="${value}"`;
+                    addCommand += ` --password='${escapedValue}'`;
                 } else if (fieldName === 'username') {
-                    addCommand += ` --username="${value}"`;
+                    addCommand += ` --username='${escapedValue}'`;
                 } else if (fieldName === 'url') {
-                    addCommand += ` --url="${value}"`;
+                    addCommand += ` --url='${escapedValue}'`;
                 } else if (fieldName === 'note' || fieldName === 'notes') {
-                    addCommand += ` --notes="${value}"`;
+                    addCommand += ` --notes='${escapedValue}'`;
                 } else {
-                    addCommand += ` --field="${fieldName}:${value}"`;
+                    const escapedFieldValue = `${fieldName}:${escapedValue}`;
+                    addCommand += ` --field='${escapedFieldValue}'`;
                 }
                 
                 const addResponse = await this.cli.run(addCommand);

@@ -1,4 +1,4 @@
-import { SecretProvider } from '../SecretProvider.js';
+import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { DefaultAzureCredential } from '@azure/identity';
 import { execSync } from 'child_process';
@@ -17,6 +17,12 @@ import { execSync } from 'child_process';
  * @see {@link https://docs.microsoft.com/javascript/api/overview/azure/identity-readme} for authentication details
  */
 export class AzureKeyVaultProvider extends SecretProvider {
+    readonly supportsMultipleFields = false;
+    readonly pathComponents = [
+        { name: 'vaultHost', type: PathComponentType.Host, description: 'Vault host (e.g., my-vault.vault.azure.net)', required: true },
+        { name: 'secret', type: PathComponentType.Item, description: 'Secret name', required: true },
+    ];
+
     /**
      * Cache of Secret Clients for different vault URLs to avoid recreating clients
      * for the same vault instance.
@@ -29,6 +35,11 @@ export class AzureKeyVaultProvider extends SecretProvider {
     constructor() {
         super();
         this.clients = new Map();
+    }
+
+    buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
+        const { vaultHost, secret } = components;
+        return `azurekv://${vaultHost}/${secret}`;
     }
 
     /**

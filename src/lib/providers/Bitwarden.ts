@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { SecretProvider } from '../SecretProvider.js';
+import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { CliHandler } from '../CliHandler.js';
 
 type BitwardenFolder = {
@@ -43,13 +43,30 @@ type BitwardenItem = {
  * @see {@link https://bitwarden.com/help/cli/} for Bitwarden CLI documentation
  */
 export class BitwardenProvider extends SecretProvider {
+    readonly supportsMultipleFields = true;
+    readonly pathComponents = [
+        { name: 'folder', type: PathComponentType.Folder, description: 'Folder name (optional)', required: false },
+        { name: 'item', type: PathComponentType.Item, description: 'Item name', required: true },
+    ];
+
     private sessionKey: string | null = null;
     private cli: CliHandler;
     private folders: BitwardenFolder[] = [];
     private items: BitwardenItem[] = [];
+    
     constructor() { 
         super();
         this.cli = new CliHandler();
+    }
+
+    buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
+        const { folder, item } = components;
+        const fieldName = opts?.fieldName || 'password';
+        
+        if (folder) {
+            return `bw://${folder}/${item}/${fieldName}`;
+        }
+        return `bw://${item}/${fieldName}`;
     }
 
     /**

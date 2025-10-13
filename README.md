@@ -6,7 +6,7 @@
   <a href="https://www.npmjs.com/package/salakala"><img src="https://img.shields.io/npm/types/salakala" alt="npm type definitions"></a>
 </p>
 
-Generate environment variables from (multiple) secret providers using a JSON configuration file. Output to `.env` files or export directly to your shell. Supports JSON field access, secret synchronization between providers, and more.
+Generate environment variables from (multiple) secret providers using a JSON configuration file checked into your repository. Output to `.env` files or export directly to your shell, or use in CI environments. Supports JSON field access, secret synchronization between providers, and more. Contains an extensive test suite with full end-to-end coverage.
 
 ```json
 {

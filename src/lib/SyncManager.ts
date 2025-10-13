@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { SecretProvider } from './SecretProvider.js';
-import inquirer from 'inquirer';
+import { select } from '@inquirer/prompts';
 
 /**
  * Configuration structure for sync operations
@@ -103,21 +103,16 @@ export class SyncManager {
         sourceValue: string,
         destProvider: SecretProvider
     ): Promise<'overwrite' | 'skip' | 'overwrite-all' | 'quit'> {
-        const { action } = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'action',
-                message: `Secret '${secretName}' already exists at '${destination}'. What would you like to do?`,
-                choices: [
-                    { name: 'Overwrite this secret', value: 'overwrite' },
-                    { name: 'Skip this secret', value: 'skip' },
-                    { name: 'Show diff', value: 'diff' },
-                    { name: 'Overwrite all remaining conflicts', value: 'overwrite-all' },
-                    { name: 'Quit', value: 'quit' }
-                ],
-                loop: false
-            }
-        ]);
+        const action = await select({
+            message: `Secret '${secretName}' already exists at '${destination}'. What would you like to do?`,
+            choices: [
+                { name: 'Overwrite this secret', value: 'overwrite' },
+                { name: 'Skip this secret', value: 'skip' },
+                { name: 'Show diff', value: 'diff' },
+                { name: 'Overwrite all remaining conflicts', value: 'overwrite-all' },
+                { name: 'Quit', value: 'quit' }
+            ]
+        });
 
         if (action === 'diff') {
             try {

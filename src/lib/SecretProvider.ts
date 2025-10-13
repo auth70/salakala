@@ -1,9 +1,58 @@
 /**
+ * Path component types for semantic classification
+ */
+export enum PathComponentType {
+    Vault = 'vault',       // Top-level container (1Password vault, etc.)
+    Item = 'item',         // Item/entry/secret that holds values
+    Section = 'section',   // Optional grouping within an item
+    Region = 'region',     // Geographic location (AWS region)
+    Project = 'project',   // Cloud project/account
+    Version = 'version',   // Version identifier
+    Path = 'path',         // File system path
+    Folder = 'folder',     // Folder/group container
+    Host = 'host'          // Hostname/URL
+}
+
+/**
+ * Path component definition for interactive prompts
+ */
+export interface PathComponent {
+    name: string;
+    type: PathComponentType;
+    description: string;
+    required: boolean;
+    default?: string;
+}
+
+/**
  * Interface for secret management providers.
  * Each provider must implement this interface to provide consistent secret retrieval functionality.
  * Providers are responsible for handling their own authentication and secret access mechanisms.
  */
 export abstract class SecretProvider {
+    /**
+     * Indicates whether this provider supports multiple fields in a single item.
+     * true: Provider can store multiple key-value pairs in one item (e.g., 1Password, Bitwarden)
+     * false: Provider stores one value per secret (e.g., AWS Secrets Manager, Google Cloud Secret Manager)
+     */
+    abstract readonly supportsMultipleFields: boolean;
+
+    /**
+     * Defines the path components that need to be collected from the user.
+     * Used by the import command to interactively build provider-specific paths.
+     */
+    abstract readonly pathComponents: PathComponent[];
+
+    /**
+     * Builds a complete provider path from the given components.
+     * 
+     * @param {Record<string, string>} components - The path component values collected from user
+     * @param {object} [opts] - Optional parameters
+     * @param {string} [opts.fieldName] - Field name for multi-field providers or JSON key access
+     * @returns {string} The complete provider URI (e.g., "op://vault/item/field")
+     */
+    abstract buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string;
+
     /**
      * Retrieves a secret value from the provider's storage.
      * For binary secrets, the value will be base64 encoded.

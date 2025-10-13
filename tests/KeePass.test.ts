@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { KeePassProvider } from '../src/lib/providers/KeePass.js';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
+import { keepassStaticData } from './fixtures/import-test-data.js';
 
 describe('KeePassProvider', () => {
     let provider: KeePassProvider;
@@ -27,12 +28,12 @@ describe('KeePassProvider', () => {
 
     it('should retrieve test entry username', async () => {
         const result = await provider.getSecret(`kp://${testDbPath}/test/UserName`);
-        expect(result).toBe('test');
+        expect(result).toBe(keepassStaticData.testEntry.UserName);
     });
 
     it('should retrieve test entry password', async () => {
         const result = await provider.getSecret(`kp://${testDbPath}/test/Password`);
-        expect(result).toBe('testtest');
+        expect(result).toBe(keepassStaticData.testEntry.Password);
     });
 
     it('should throw error for non-existent entry', async () => {
@@ -49,12 +50,12 @@ describe('KeePassProvider', () => {
 
     it('should retrieve JSON secret with :: syntax', async () => {
         const result = await provider.getSecret(`kp://${testDbPath}/json-test-entry/Notes::key`);
-        expect(result).toBe('test-json-value');
+        expect(result).toBe(keepassStaticData.jsonTestEntry.Notes.key);
     });
 
     it('should retrieve nested JSON secret with :: syntax', async () => {
         const result = await provider.getSecret(`kp://${testDbPath}/json-test-entry/Notes::nested.value`);
-        expect(result).toBe('nested-test-value');
+        expect(result).toBe(keepassStaticData.jsonTestEntry.Notes.nested.value);
     });
 
     it('should throw on non-existent JSON key with :: syntax', async () => {
@@ -80,6 +81,32 @@ describe('KeePassProvider', () => {
             await expect(provider.deleteSecret(`kp://${testDbPath}/non-existent-entry/Password`))
                 .rejects
                 .toThrow();
+        });
+    });
+
+    describe('buildPath', () => {
+        it('should build correct path with database, entry, and field', () => {
+            const path = provider.buildPath(
+                { dbPath: '/path/to/db.kdbx', entry: 'GitHub' },
+                { fieldName: 'Password' }
+            );
+            expect(path).toBe('kp:///path/to/db.kdbx/GitHub/Password');
+        });
+
+        it('should use default field name if not provided', () => {
+            const path = provider.buildPath({
+                dbPath: '/Users/test/secrets.kdbx',
+                entry: 'MyEntry'
+            });
+            expect(path).toBe('kp:///Users/test/secrets.kdbx/MyEntry/Password');
+        });
+
+        it('should handle relative paths', () => {
+            const path = provider.buildPath(
+                { dbPath: './secrets.kdbx', entry: 'Web/GitHub' },
+                { fieldName: 'UserName' }
+            );
+            expect(path).toBe('kp://./secrets.kdbx/Web/GitHub/UserName');
         });
     });
 }); 

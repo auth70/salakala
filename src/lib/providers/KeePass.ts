@@ -1,4 +1,4 @@
-import { SecretProvider } from '../SecretProvider.js';
+import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { CliHandler } from '../CliHandler.js';
 
 /**
@@ -14,6 +14,12 @@ import { CliHandler } from '../CliHandler.js';
  * @see {@link https://keepassxc.org/docs/KeePassXC_GettingStarted.html#_using_keepassxc_cli} for CLI documentation
  */
 export class KeePassProvider extends SecretProvider {
+    readonly supportsMultipleFields = true;
+    readonly pathComponents = [
+        { name: 'dbPath', type: PathComponentType.Path, description: 'Database path (e.g., /path/to/db.kdbx)', required: true },
+        { name: 'entry', type: PathComponentType.Item, description: 'Entry name', required: true },
+    ];
+
     private cli: CliHandler;
     private password: string | null = null;
 
@@ -24,6 +30,12 @@ export class KeePassProvider extends SecretProvider {
         if (process.env.KEEPASS_PASSWORD) {
             this.password = process.env.KEEPASS_PASSWORD;
         }
+    }
+
+    buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
+        const { dbPath, entry } = components;
+        const fieldName = opts?.fieldName || 'Password';
+        return `kp://${dbPath}/${entry}/${fieldName}`;
     }
 
     /**
@@ -198,9 +210,9 @@ export class KeePassProvider extends SecretProvider {
                         throw new Error(editResponse.message || 'Failed to update password');
                     }
                 } else {
-                    // For other attributes, we need to use set command
+                    const escapedValue = this.cli.escapeShellValue(value);
                     const editResponse = await this.cli.run(
-                        `keepassxc-cli set "${dbPath}" "${entryName}" "${attribute}" "${value}"`,
+                        `keepassxc-cli set "${dbPath}" "${entryName}" "${attribute}" '${escapedValue}'`,
                         {
                             interactive: true,
                             passwordPrompt: 'Enter password to unlock'

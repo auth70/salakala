@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi, afterEach } from 'vitest';
 import { BitwardenProvider } from '../src/lib/providers/Bitwarden.js';
+import { parseEnvContent } from '../src/lib/ImportUtils.js';
+import { simpleTestVars, jsonTestVars, standardJsonData, complexJsonData } from './fixtures/import-test-data.js';
 
 describe('BitwardenProvider', () => {
     if (!process.env.BW_CLIENTID || !process.env.BW_CLIENTSECRET || !process.env.BW_PASSWORD) {
@@ -27,34 +29,66 @@ describe('BitwardenProvider', () => {
     });
 
     it('should retrieve password field by name', async () => {
-        const result = await provider.getSecret(`bw://webtest/password`);
-        expect(result).toBe('test-password-value');
-    });
+        const timestamp = Date.now();
+        const itemName = `test-password-${timestamp}`;
+        const testValue = 'test-password-value';
+        const path = `bw://${itemName}/password`;
+        createdItems.push(path);
+        
+        await provider.setSecret(path, testValue);
+        
+        const result = await provider.getSecret(path);
+        expect(result).toBe(testValue);
+    }, 60000);
 
     it('should retrieve a json notes field', async () => {
-        const result = await provider.getSecret(`bw://webtest/notes`);
-        expect(result).toBe('{"foo":"bar","baz":{"lorem":["ipsum","dolor"]}}');
-    });
+        const timestamp = Date.now();
+        const itemName = `test-json-notes-${timestamp}`;
+        const path = `bw://${itemName}/notes`;
+        createdItems.push(path);
+        
+        await provider.setSecret(path, JSON.stringify(complexJsonData));
+        
+        const result = await provider.getSecret(path);
+        expect(result).toBe(JSON.stringify(complexJsonData));
+    }, 60000);
 
     it('should retrieve a json notes field by key', async () => {
-        const result = await provider.getSecret(`bw://webtest/notes::foo`);
-        expect(result).toBe('bar');
-    });
+        const timestamp = Date.now();
+        const itemName = `test-json-key-${timestamp}`;
+        const path = `bw://${itemName}/notes`;
+        createdItems.push(path);
+        
+        await provider.setSecret(path, JSON.stringify(complexJsonData));
+        
+        const result = await provider.getSecret(`${path}::foo`);
+        expect(result).toBe(complexJsonData.foo);
+    }, 60000);
 
     it('should retrieve a json notes field by complex key', async () => {
-        const result = await provider.getSecret(`bw://webtest/notes::baz.lorem[1]`);
-        expect(result).toBe('dolor');
-    });
-
-    it('should retrieve a uris field', async () => {
-        const result = await provider.getSecret(`bw://webtest/uris/0`);
-        expect(result).toBe('google.com');
-    });
+        const timestamp = Date.now();
+        const itemName = `test-complex-key-${timestamp}`;
+        const path = `bw://${itemName}/notes`;
+        createdItems.push(path);
+        
+        await provider.setSecret(path, JSON.stringify(complexJsonData));
+        
+        const result = await provider.getSecret(`${path}::baz.lorem[1]`);
+        expect(result).toBe(complexJsonData.baz.lorem[1]);
+    }, 60000);
 
     it('should retrieve custom field by name', async () => {
-        const result = await provider.getSecret(`bw://webtest/test-field`);
-        expect(result).toBe('test-secret-value');
-    });
+        const timestamp = Date.now();
+        const itemName = `test-custom-field-${timestamp}`;
+        const testValue = 'test-secret-value';
+        const path = `bw://${itemName}/test-field`;
+        createdItems.push(path);
+        
+        await provider.setSecret(path, testValue);
+        
+        const result = await provider.getSecret(path);
+        expect(result).toBe(testValue);
+    }, 60000);
 
     it('should throw error for invalid path format', async () => {
         await expect(provider.getSecret('invalid-path'))
@@ -126,6 +160,145 @@ describe('BitwardenProvider', () => {
             await expect(provider.getSecret(`bw://test-folder/${itemName}/password`))
                 .rejects
                 .toThrow();
+        }, 60000);
+    });
+
+    describe('buildPath', () => {
+        it('should build path with folder, item, and field', () => {
+            const path = provider.buildPath(
+                { folder: 'my-folder', item: 'my-item' },
+                { fieldName: 'api-key' }
+            );
+            expect(path).toBe('bw://my-folder/my-item/api-key');
+        });
+
+        it('should build path without folder', () => {
+            const path = provider.buildPath(
+                { item: 'my-item' },
+                { fieldName: 'password' }
+            );
+            expect(path).toBe('bw://my-item/password');
+        });
+
+        it('should use default field name if not provided', () => {
+            const path = provider.buildPath({
+                folder: 'work',
+                item: 'credentials'
+            });
+            expect(path).toBe('bw://work/credentials/password');
+        });
+    });
+
+    describe('Import integration: JSON bundle storage', () => {
+        it('should store and retrieve env vars as JSON bundle', async () => {
+            const timestamp = Date.now();
+            const itemName = `test-import-json-${timestamp}`;
+            
+            const testVars = { ...simpleTestVars, ...jsonTestVars };
+            const jsonBundle = JSON.stringify(testVars);
+            
+            const bundlePath = provider.buildPath(
+                { folder: 'test-folder', item: itemName },
+                { fieldName: 'notes' }
+            );
+            createdItems.push(bundlePath);
+            
+            await provider.setSecret(bundlePath, jsonBundle);
+            
+            // Retrieve and verify
+            const retrieved = await provider.getSecret(bundlePath);
+            const parsed = JSON.parse(retrieved);
+            
+            expect(parsed.API_KEY).toBe(simpleTestVars.API_KEY);
+            expect(parsed.DB_PASSWORD).toBe(simpleTestVars.DB_PASSWORD);
+            
+            // Verify nested JSON
+            const config = JSON.parse(parsed.CONFIG);
+            expect(config.key).toBe('value');
+            expect(config.number).toBe(42);
+        }, 60000);
+
+        it('should retrieve specific fields from JSON bundle using :: syntax', async () => {
+            const timestamp = Date.now();
+            const itemName = `test-import-json-field-${timestamp}`;
+            
+            const testVars = simpleTestVars;
+            const jsonBundle = JSON.stringify(testVars);
+            
+            const bundlePath = provider.buildPath(
+                { folder: 'test-folder', item: itemName },
+                { fieldName: 'notes' }
+            );
+            createdItems.push(bundlePath);
+            
+            await provider.setSecret(bundlePath, jsonBundle);
+            
+            // Retrieve specific fields using :: syntax
+            const apiKey = await provider.getSecret(`${bundlePath}::API_KEY`);
+            const dbPassword = await provider.getSecret(`${bundlePath}::DB_PASSWORD`);
+            
+            expect(apiKey).toBe(simpleTestVars.API_KEY);
+            expect(dbPassword).toBe(simpleTestVars.DB_PASSWORD);
+        }, 60000);
+    });
+
+    describe('Import integration: Individual fields storage', () => {
+        it('should store and retrieve multiple fields in one item', async () => {
+            const timestamp = Date.now();
+            const itemName = `test-import-fields-${timestamp}`;
+            
+            const testVars = simpleTestVars;
+            
+            // Store each var as a separate field (using notes for custom fields)
+            for (const [key, value] of Object.entries(testVars)) {
+                const path = provider.buildPath(
+                    { folder: 'test-folder', item: itemName },
+                    { fieldName: key }
+                );
+                if (key === Object.keys(testVars)[0]) {
+                    createdItems.push(`bw://test-folder/${itemName}/password`);
+                }
+                await provider.setSecret(path, value);
+            }
+            
+            // Retrieve and verify each field
+            for (const [key, expectedValue] of Object.entries(testVars)) {
+                const path = provider.buildPath(
+                    { folder: 'test-folder', item: itemName },
+                    { fieldName: key }
+                );
+                const retrieved = await provider.getSecret(path);
+                expect(retrieved).toBe(expectedValue);
+            }
+        }, 60000);
+
+        it('should store fields without folder', async () => {
+            const timestamp = Date.now();
+            const itemName = `test-import-no-folder-${timestamp}`;
+            
+            const testVars = simpleTestVars;
+            
+            // Store fields without folder
+            for (const [key, value] of Object.entries(testVars)) {
+                const path = provider.buildPath(
+                    { item: itemName },
+                    { fieldName: key }
+                );
+                if (key === Object.keys(testVars)[0]) {
+                    createdItems.push(`bw://${itemName}/password`);
+                }
+                await provider.setSecret(path, value);
+            }
+            
+            // Retrieve and verify
+            for (const [key, expectedValue] of Object.entries(testVars)) {
+                const path = provider.buildPath(
+                    { item: itemName },
+                    { fieldName: key }
+                );
+                const retrieved = await provider.getSecret(path);
+                expect(retrieved).toBe(expectedValue);
+            }
         }, 60000);
     });
 

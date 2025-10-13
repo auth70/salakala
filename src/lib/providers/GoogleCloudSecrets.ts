@@ -1,5 +1,5 @@
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
-import { SecretProvider } from '../SecretProvider.js';
+import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 
 /**
  * Provider for accessing secrets stored in Google Cloud Secret Manager.
@@ -17,6 +17,13 @@ import { SecretProvider } from '../SecretProvider.js';
  * @see {@link https://github.com/googleapis/nodejs-secret-manager} for client library documentation
  */
 export class GoogleCloudSecretsProvider extends SecretProvider {
+    readonly supportsMultipleFields = false;
+    readonly pathComponents = [
+        { name: 'project', type: PathComponentType.Project, description: 'GCP project ID', required: true },
+        { name: 'secret', type: PathComponentType.Item, description: 'Secret name', required: true },
+        { name: 'version', type: PathComponentType.Version, description: 'Version', required: false, default: 'latest' },
+    ];
+
     /**
      * Client instance for interacting with Google Cloud Secret Manager.
      * A single client is used as it handles multiple projects and regions internally.
@@ -30,6 +37,11 @@ export class GoogleCloudSecretsProvider extends SecretProvider {
     constructor() {
         super();
         this.client = new SecretManagerServiceClient();
+    }
+
+    buildPath(components: Record<string, string>, opts?: { fieldName?: string }): string {
+        const { project, secret, version = 'latest' } = components;
+        return `gcsm://projects/${project}/secrets/${secret}/versions/${version}`;
     }
     
     /**

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AzureKeyVaultProvider } from '../src/lib/providers/AzureKeyVault.js';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { DefaultAzureCredential } from '@azure/identity';
+import { standardJsonData } from './fixtures/import-test-data.js';
 
 vi.mock('@azure/keyvault-secrets');
 vi.mock('@azure/identity');
@@ -69,7 +70,7 @@ describe('AzureKeyVaultProvider', () => {
     });
 
     it('should retrieve JSON secret with :: syntax', async () => {
-        const mockSecret = { value: '{"key": "test-json-value", "nested": {"value": "nested-test-value"}}' };
+        const mockSecret = { value: JSON.stringify(standardJsonData) };
         const mockGetSecret = vi.fn().mockResolvedValue(mockSecret);
         
         vi.mocked(SecretClient).mockImplementation(() => ({
@@ -80,12 +81,12 @@ describe('AzureKeyVaultProvider', () => {
 
         const result = await provider.getSecret('azurekv://my-vault.vault.azure.net/json-secret::key');
         
-        expect(result).toBe('test-json-value');
+        expect(result).toBe(standardJsonData.key);
         expect(mockGetSecret).toHaveBeenCalledWith('json-secret');
     });
 
     it('should retrieve nested JSON secret with :: syntax', async () => {
-        const mockSecret = { value: '{"key": "test-json-value", "nested": {"value": "nested-test-value"}}' };
+        const mockSecret = { value: JSON.stringify(standardJsonData) };
         const mockGetSecret = vi.fn().mockResolvedValue(mockSecret);
         
         vi.mocked(SecretClient).mockImplementation(() => ({
@@ -96,12 +97,12 @@ describe('AzureKeyVaultProvider', () => {
 
         const result = await provider.getSecret('azurekv://my-vault.vault.azure.net/json-secret::nested.value');
         
-        expect(result).toBe('nested-test-value');
+        expect(result).toBe(standardJsonData.nested.value);
         expect(mockGetSecret).toHaveBeenCalledWith('json-secret');
     });
 
     it('should throw on non-existent JSON key with :: syntax', async () => {
-        const mockSecret = { value: '{"key": "test-json-value"}' };
+        const mockSecret = { value: JSON.stringify(standardJsonData) };
         const mockGetSecret = vi.fn().mockResolvedValue(mockSecret);
         
         vi.mocked(SecretClient).mockImplementation(() => ({
@@ -120,6 +121,24 @@ describe('AzureKeyVaultProvider', () => {
             await expect(provider.setSecret('invalid-path', 'value'))
                 .rejects
                 .toThrow('Invalid URI: invalid-path');
+        });
+    });
+
+    describe('buildPath', () => {
+        it('should build correct path with vault host and secret', () => {
+            const path = provider.buildPath({
+                vaultHost: 'my-vault.vault.azure.net',
+                secret: 'my-secret'
+            });
+            expect(path).toBe('azurekv://my-vault.vault.azure.net/my-secret');
+        });
+
+        it('should build path regardless of fieldName option', () => {
+            const path = provider.buildPath(
+                { vaultHost: 'test-vault.vault.azure.net', secret: 'test-secret' },
+                { fieldName: 'ignored' }
+            );
+            expect(path).toBe('azurekv://test-vault.vault.azure.net/test-secret');
         });
     });
 }); 
