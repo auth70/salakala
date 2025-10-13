@@ -3,7 +3,7 @@
     "bin": {
         "salakala": "dist/cli.js"
     },
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Generate environment variables from various secret providers via URIs in JSON files, checked into your repository",
     "type": "module",
     "scripts": {
@@ -27,8 +27,8 @@
     ],
     "license": "MIT",
     "devDependencies": {
-        "@types/node": "^24.5.2",
-        "typescript": "^5.9.2",
+        "@types/node": "^24.7.2",
+        "typescript": "^5.9.3",
         "vitest": "^3.2.4"
     },
     "files": [
@@ -37,15 +37,15 @@
         "README.md"
     ],
     "dependencies": {
-        "@aws-sdk/client-secrets-manager": "^3.891.0",
-        "@azure/identity": "^4.12.0",
+        "@aws-sdk/client-secrets-manager": "^3.908.0",
+        "@azure/identity": "^4.13.0",
         "@azure/keyvault-secrets": "^4.10.0",
         "@commander-js/extra-typings": "^14.0.0",
         "@google-cloud/secret-manager": "^6.1.0",
         "commander": "^14.0.1",
-        "dotenv": "^17.2.2",
+        "dotenv": "^17.2.3",
         "inquirer": "^12.9.6",
-        "node-vault": "^0.10.5"
+        "node-vault": "^0.10.9"
     },
     "overrides": {
         "whatwg-url": "^15.1.0"
