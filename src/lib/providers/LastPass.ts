@@ -1,6 +1,6 @@
 import { SecretProvider, PathComponentType } from '../SecretProvider.js';
 import { CliHandler } from '../CliHandler.js';
-import inquirer from 'inquirer';
+import { input } from '@inquirer/prompts';
 import { EMOJI } from '../constants.js';
 
 type LastPassItem = {
@@ -88,13 +88,11 @@ export class LastPassProvider extends SecretProvider {
 
     async tryLogin() {
         console.log('The LastPass CLI needs your username to be passed in as an argument when logging in. Please enter it now.');
-        const promptResult = await inquirer.prompt({
-            type: 'input',
-            name: 'username',
+        const username = await input({
             message: 'Enter your LastPass username:',
         });
         console.log(`${EMOJI.LOGIN} LastPass needs to login. You are interacting with LastPass CLI now.`);
-        const result = await this.cli.run(`lpass login ${promptResult.username}`, {
+        const result = await this.cli.run(`lpass login ${username}`, {
             interactive: true,
         });
         if(result.state !== 'ok') {
