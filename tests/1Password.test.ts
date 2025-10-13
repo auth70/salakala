@@ -1,14 +1,27 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { OnePasswordProvider } from '../src/lib/providers/1Password.js';
 
 describe('OnePasswordProvider', () => {
     let provider: OnePasswordProvider;
+    const createdItems: string[] = [];
 
     beforeEach(() => {
         if (!process.env.OP_SERVICE_ACCOUNT_TOKEN) {
             throw new Error('OP_SERVICE_ACCOUNT_TOKEN environment variable must be set');
         }
         provider = new OnePasswordProvider();
+    });
+
+    afterEach(async () => {
+        for (const itemPath of createdItems) {
+            try {
+                await provider.deleteSecret(itemPath);
+            } catch (error) {
+                console.error('Error deleting 1Password item', error);
+                // Ignore errors during cleanup
+            }
+        }
+        createdItems.length = 0;
     });
 
     it('should throw error for invalid path format', async () => {
@@ -72,15 +85,18 @@ describe('OnePasswordProvider', () => {
     describe('Write operations', () => {
         it('should write a secret to 1Password', async () => {
             const testValue = `test-value-${Date.now()}`;
+            createdItems.push('op://testing/test-write-item/password');
+            
             await provider.setSecret('op://testing/test-write-item/password', testValue);
             
             const retrievedValue = await provider.getSecret('op://testing/test-write-item/password');
             expect(retrievedValue).toBe(testValue);
-        });
+        }, 15000);
 
         it('should update an existing secret', async () => {
             const initialValue = `initial-${Date.now()}`;
             const updatedValue = `updated-${Date.now()}`;
+            createdItems.push('op://testing/test-update-item/password');
             
             await provider.setSecret('op://testing/test-update-item/password', initialValue);
             const firstRead = await provider.getSecret('op://testing/test-update-item/password');
@@ -102,5 +118,15 @@ describe('OnePasswordProvider', () => {
                 .rejects
                 .toThrow('1Password path must include a field name');
         });
+
+        it('should delete a secret', async () => {
+            const testValue = 'value-to-delete';
+            await provider.setSecret('op://testing/test-delete-item/password', testValue);
+            await provider.deleteSecret('op://testing/test-delete-item/password');
+            
+            await expect(provider.getSecret('op://testing/test-delete-item/password'))
+                .rejects
+                .toThrow();
+        }, 15000);
     });
 }); 

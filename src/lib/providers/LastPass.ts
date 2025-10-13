@@ -292,4 +292,40 @@ test-folder/test [id: 6754388171590937865]
         }
     }
 
+    /**
+     * Deletes a secret from LastPass.
+     * Deletes the entire item.
+     * 
+     * @param {string} path - The LastPass secret reference path
+     *                        Format: lp://folder/item-name/field
+     *                        Example: lp://work/api-credentials/password
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be deleted
+     */
+    async deleteSecret(path: string): Promise<void> {
+        await this.checkLogin();
+        
+        const parsedPath = this.parsePath(path);
+        
+        if (parsedPath.pathParts.length < 2) {
+            throw new Error('LastPass path must include at least item name and field');
+        }
+
+        const itemName = parsedPath.pathParts.slice(0, -1).join('/');
+
+        try {
+            console.log(`🗑️  Deleting LastPass item ${itemName}...`);
+            const deleteResponse = await this.cli.run(`lpass rm "${itemName}"`);
+            
+            if (deleteResponse.state !== 'ok') {
+                throw new Error(deleteResponse.message || 'Failed to delete item');
+            }
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to delete LastPass secret: ${error.message}`);
+            }
+            throw new Error('Failed to delete LastPass secret: Unknown error');
+        }
+    }
+
 } 

@@ -200,4 +200,47 @@ export class OnePasswordProvider extends SecretProvider {
             throw new Error('Failed to write 1Password secret: Unknown error');
         }
     }
+
+    /**
+     * Deletes a secret from 1Password.
+     * Deletes the entire item from the vault.
+     * 
+     * @param {string} path - The 1Password secret reference path
+     *                        Format: op://vault-name/item-name/[section-name/]field-name
+     *                        Example: op://Development/API Keys/production/access_token
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be deleted
+     */
+    async deleteSecret(path: string): Promise<void> {
+        if (!path.startsWith('op://')) {
+            throw new Error('Invalid 1Password secret path');
+        }
+
+        const parsedPath = this.parsePath(path);
+        const pathParts = parsedPath.pathParts;
+
+        if (pathParts.length < 2) {
+            throw new Error('1Password path must include at least vault and item name');
+        }
+
+        const vaultName = pathParts[0];
+        const itemName = pathParts[1];
+
+        try {
+            console.log(`🗑️  Deleting 1Password item ${itemName}...`);
+            const deleteCommand = this.sessionToken
+                ? `op item delete "${itemName}" --vault="${vaultName}" --session="${this.sessionToken}"`
+                : `op item delete "${itemName}" --vault="${vaultName}"`;
+
+            const deleteResponse = await this.cli.run(deleteCommand);
+            if (deleteResponse.state !== 'ok') {
+                throw new Error(deleteResponse.error?.message || deleteResponse.message || 'Failed to delete 1Password item');
+            }
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to delete 1Password secret: ${error.message}`);
+            }
+            throw new Error('Failed to delete 1Password secret: Unknown error');
+        }
+    }
 }

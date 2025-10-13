@@ -185,4 +185,37 @@ export class AzureKeyVaultProvider extends SecretProvider {
             throw new Error('Failed to write Azure Key Vault secret: Unknown error');
         }
     }
+
+    /**
+     * Deletes a secret from Azure Key Vault.
+     * 
+     * @param {string} path - The Azure Key Vault secret reference path
+     *                        Format: azurekv://vault-name.vault.azure.net/secret-name
+     *                        Example: azurekv://my-vault.vault.azure.net/api-key
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be deleted
+     */
+    async deleteSecret(path: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
+        if (!pathMatch) {
+            throw new Error('Invalid Azure Key Vault path format. Expected: azurekv://vault-name.vault.azure.net/secret-name');
+        }
+
+        const [, vaultUrl, secretName] = pathMatch;
+        const fullVaultUrl = `https://${vaultUrl}`;
+        const client = this.getClient(fullVaultUrl);
+
+        try {
+            console.log(`🗑️  Deleting secret ${secretName}...`);
+            const poller = await client.beginDeleteSecret(secretName);
+            await poller.pollUntilDone();
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to delete Azure Key Vault secret: ${error.message}`);
+            }
+            throw new Error('Failed to delete Azure Key Vault secret: Unknown error');
+        }
+    }
 } 

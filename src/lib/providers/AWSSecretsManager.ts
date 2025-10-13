@@ -1,5 +1,5 @@
 import { SecretProvider } from '../SecretProvider.js';
-import { SecretsManager, CreateSecretCommand, PutSecretValueCommand, ResourceExistsException } from '@aws-sdk/client-secrets-manager';
+import { SecretsManager, CreateSecretCommand, PutSecretValueCommand, DeleteSecretCommand, ResourceExistsException } from '@aws-sdk/client-secrets-manager';
 import { execSync } from 'child_process';
 
 /**
@@ -195,6 +195,40 @@ export class AWSSecretsManagerProvider extends SecretProvider {
                 throw new Error(`Failed to write AWS secret: ${error.message}`);
             }
             throw new Error('Failed to write AWS secret: Unknown error');
+        }
+    }
+
+    /**
+     * Deletes a secret from AWS Secrets Manager.
+     * 
+     * @param {string} path - The AWS Secrets Manager reference path
+     *                        Format: awssm://region/secret-name
+     *                        Example: awssm://us-east-1/prod/api-key
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be deleted
+     */
+    async deleteSecret(path: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        const pathMatch = parsedPath.path.match(/^([^\/]+)\/(.+)$/);
+        if (!pathMatch) {
+            throw new Error('Invalid AWS secret path format. Expected: awssm://region/secret-name');
+        }
+
+        const [, region, secretId] = pathMatch;
+        const client = this.getClient(region);
+
+        try {
+            console.log(`🗑️  Deleting secret ${secretId}...`);
+            await client.send(new DeleteSecretCommand({
+                SecretId: secretId,
+                ForceDeleteWithoutRecovery: true
+            }));
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to delete AWS secret: ${error.message}`);
+            }
+            throw new Error('Failed to delete AWS secret: Unknown error');
         }
     }
 }

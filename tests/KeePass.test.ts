@@ -75,5 +75,11 @@ describe('KeePassProvider', () => {
                 .rejects
                 .toThrow('KeePass path must include database path, entry path, and attribute');
         });
+
+        it('should throw error when trying to delete non-existent entry', async () => {
+            await expect(provider.deleteSecret(`kp://${testDbPath}/non-existent-entry/Password`))
+                .rejects
+                .toThrow();
+        });
     });
 }); 

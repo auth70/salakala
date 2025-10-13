@@ -251,4 +251,49 @@ export class KeePassProvider extends SecretProvider {
             throw new Error('Failed to write KeePass secret: Unknown error');
         }
     }
+
+    /**
+     * Deletes a secret from KeePass.
+     * Deletes the entire entry from the database.
+     * 
+     * Note: KeePassXC CLI requires interactive password entry.
+     * 
+     * @param {string} path - The KeePass secret reference path
+     *                        Format: kp://path/to/database.kdbx/entry-path/attribute
+     *                        Example: kp:///Users/me/secrets.kdbx/Web/GitHub/Password
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be deleted
+     */
+    async deleteSecret(path: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        if (parsedPath.pathParts.length < 3) {
+            throw new Error('KeePass path must include database path, entry path, and attribute');
+        }
+
+        const dbPath = parsedPath.pathParts[0];
+        const entryName = parsedPath.pathParts.slice(1, -1).join('/');
+
+        try {
+            console.log(`🗑️  Deleting KeePass entry ${entryName}...`);
+            console.log('⚠️  KeePassXC CLI requires interactive password entry for deletion');
+            
+            const deleteResponse = await this.cli.run(
+                `keepassxc-cli rm "${dbPath}" "${entryName}"`,
+                {
+                    interactive: true,
+                    passwordPrompt: 'Enter password to unlock'
+                }
+            );
+            
+            if (deleteResponse.state !== 'ok') {
+                throw new Error(deleteResponse.message || 'Failed to delete entry');
+            }
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to delete KeePass secret: ${error.message}`);
+            }
+            throw new Error('Failed to delete KeePass secret: Unknown error');
+        }
+    }
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi, afterEach } from 'vitest';
 import { BitwardenProvider } from '../src/lib/providers/Bitwarden.js';
 
 describe('BitwardenProvider', () => {
@@ -8,10 +8,23 @@ describe('BitwardenProvider', () => {
 
     process.env.BW_SERVER = 'https://vault.bitwarden.eu';
     const provider = new BitwardenProvider();
+    const createdItems: string[] = [];
 
     beforeAll(async () => {
         await provider.getItems();
     }, 30000);
+
+    afterEach(async () => {
+        for (const itemPath of createdItems) {
+            try {
+                await provider.deleteSecret(itemPath);
+            } catch (error) {
+                console.error('Error deleting Bitwarden item', error);
+                // Ignore errors during cleanup
+            }
+        }
+        createdItems.length = 0;
+    });
 
     it('should retrieve password field by name', async () => {
         const result = await provider.getSecret(`bw://webtest/password`);
@@ -74,6 +87,7 @@ describe('BitwardenProvider', () => {
         it('should write a new item to Bitwarden', async () => {
             const itemName = `test-write-item-${Date.now()}`;
             const testValue = `test-value-${Date.now()}`;
+            createdItems.push(`bw://test-folder/${itemName}/password`);
             
             await provider.setSecret(`bw://test-folder/${itemName}/password`, testValue);
             
@@ -85,6 +99,7 @@ describe('BitwardenProvider', () => {
             const itemName = `test-update-item-${Date.now()}`;
             const initialValue = `initial-${Date.now()}`;
             const updatedValue = `updated-${Date.now()}`;
+            createdItems.push(`bw://test-folder/${itemName}/password`);
             
             await provider.setSecret(`bw://test-folder/${itemName}/password`, initialValue);
             const firstRead = await provider.getSecret(`bw://test-folder/${itemName}/password`);
@@ -93,13 +108,25 @@ describe('BitwardenProvider', () => {
             await provider.setSecret(`bw://test-folder/${itemName}/password`, updatedValue);
             const secondRead = await provider.getSecret(`bw://test-folder/${itemName}/password`);
             expect(secondRead).toBe(updatedValue);
-        }, 30000);
+        }, 60000);
 
         it('should throw error for invalid path', async () => {
             await expect(provider.setSecret('invalid-path', 'value'))
                 .rejects
                 .toThrow('Invalid URI: invalid-path');
         });
+
+        it('should delete an item', async () => {
+            const itemName = `test-delete-item-${Date.now()}`;
+            const testValue = 'value-to-delete';
+            
+            await provider.setSecret(`bw://test-folder/${itemName}/password`, testValue);
+            await provider.deleteSecret(`bw://test-folder/${itemName}/password`);
+            
+            await expect(provider.getSecret(`bw://test-folder/${itemName}/password`))
+                .rejects
+                .toThrow();
+        }, 60000);
     });
 
 }, 30000); 

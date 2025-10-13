@@ -1,13 +1,26 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { AWSSecretsManagerProvider } from '../src/lib/providers/AWSSecretsManager.js';
 
 describe('AWSSecretsManagerProvider', () => {
     let provider: AWSSecretsManagerProvider;
     let region: string;
+    const createdSecrets: string[] = [];
 
     beforeEach(() => {
         region = process.env.AWS_REGION || 'us-east-1';
         provider = new AWSSecretsManagerProvider();
+    });
+
+    afterEach(async () => {
+        for (const secretPath of createdSecrets) {
+            try {
+                await provider.deleteSecret(secretPath);
+            } catch (error) {
+                console.error('Error deleting AWS secret', error);
+                // Ignore errors during cleanup
+            }
+        }
+        createdSecrets.length = 0;
     });
 
     it('should throw error for invalid path format', async () => {
@@ -60,6 +73,8 @@ describe('AWSSecretsManagerProvider', () => {
         it('should write a new secret to AWS', async () => {
             const secretId = `test/test-write-secret-${Date.now()}`;
             const testValue = `test-value-${Date.now()}`;
+            createdSecrets.push(`awssm://${region}/${secretId}`);
+            console.log(`Created secret: awssm://${region}/${secretId}`);
             
             await provider.setSecret(`awssm://${region}/${secretId}`, testValue);
             
@@ -71,7 +86,8 @@ describe('AWSSecretsManagerProvider', () => {
             const secretId = `test/test-update-secret-${Date.now()}`;
             const initialValue = `initial-${Date.now()}`;
             const updatedValue = `updated-${Date.now()}`;
-            
+            createdSecrets.push(`awssm://${region}/${secretId}`);
+            console.log(`Created secret: awssm://${region}/${secretId}`);
             await provider.setSecret(`awssm://${region}/${secretId}`, initialValue);
             const firstRead = await provider.getSecret(`awssm://${region}/${secretId}`);
             expect(firstRead).toBe(initialValue);
@@ -86,5 +102,17 @@ describe('AWSSecretsManagerProvider', () => {
                 .rejects
                 .toThrow('Invalid URI: invalid-path');
         });
+
+        it('should delete a secret', async () => {
+            const secretId = `test/test-delete-secret-${Date.now()}`;
+            const testValue = 'value-to-delete';
+            
+            await provider.setSecret(`awssm://${region}/${secretId}`, testValue);
+            await provider.deleteSecret(`awssm://${region}/${secretId}`);
+            
+            await expect(provider.getSecret(`awssm://${region}/${secretId}`))
+                .rejects
+                .toThrow();
+        }, 15000);
     });
 });

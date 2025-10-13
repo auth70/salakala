@@ -216,4 +216,35 @@ Authentication failed. Please authenticate with Google Cloud:
             throw new Error('Failed to write Google Cloud secret: Unknown error');
         }
     }
+
+    /**
+     * Deletes a secret from Google Cloud Secret Manager.
+     * 
+     * @param {string} path - The Google Cloud secret reference path
+     *                        Format: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION
+     *                        Example: gcsm://projects/my-project/secrets/api-key/versions/latest
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be deleted
+     */
+    async deleteSecret(path: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        const pathMatch = parsedPath.path.match(/^projects\/([^\/]+)\/secrets\/([^\/]+)\/versions\/(.+)$/);
+        if (!pathMatch) {
+            throw new Error('Invalid Google Cloud secret path format. Expected: gcsm://projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION');
+        }
+
+        const [, projectId, secretId] = pathMatch;
+        const secretName = `projects/${projectId}/secrets/${secretId}`;
+
+        try {
+            console.log(`🗑️  Deleting secret ${secretId}...`);
+            await this.client.deleteSecret({ name: secretName });
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to delete Google Cloud secret: ${error.message}`);
+            }
+            throw new Error('Failed to delete Google Cloud secret: Unknown error');
+        }
+    }
 }

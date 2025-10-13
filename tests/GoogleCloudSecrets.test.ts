@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { GoogleCloudSecretsProvider } from '../src/lib/providers/GoogleCloudSecrets.js';
 
 describe('GoogleCloudSecretsProvider', () => {
     let provider: GoogleCloudSecretsProvider;
     let projectId: string;
+    const createdSecrets: string[] = [];
 
     beforeEach(() => {
         const envProjectId = process.env.GOOGLE_CLOUD_PROJECT;
@@ -12,6 +13,17 @@ describe('GoogleCloudSecretsProvider', () => {
         }
         projectId = envProjectId;
         provider = new GoogleCloudSecretsProvider();
+    });
+
+    afterEach(async () => {
+        for (const secretId of createdSecrets) {
+            try {
+                await provider.deleteSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`);
+            } catch (error) {
+                // Ignore errors during cleanup
+            }
+        }
+        createdSecrets.length = 0;
     });
 
     it('should throw error for invalid path format', async () => {
@@ -64,6 +76,7 @@ describe('GoogleCloudSecretsProvider', () => {
         it('should write a new secret to Google Cloud', async () => {
             const secretId = `test-write-secret-${Date.now()}`;
             const testValue = `test-value-${Date.now()}`;
+            createdSecrets.push(secretId);
             
             await provider.setSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`, testValue);
             
@@ -75,6 +88,7 @@ describe('GoogleCloudSecretsProvider', () => {
             const secretId = `test-update-secret-${Date.now()}`;
             const initialValue = `initial-${Date.now()}`;
             const updatedValue = `updated-${Date.now()}`;
+            createdSecrets.push(secretId);
             
             await provider.setSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`, initialValue);
             const firstRead = await provider.getSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`);
@@ -107,6 +121,7 @@ describe('GoogleCloudSecretsProvider', () => {
         it('should handle JSON content in secret', async () => {
             const secretId = `test-json-write-${Date.now()}`;
             const jsonValue = JSON.stringify({ key: 'value', nested: { data: 'test' } });
+            createdSecrets.push(secretId);
             
             await provider.setSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`, jsonValue);
             
@@ -116,6 +131,18 @@ describe('GoogleCloudSecretsProvider', () => {
             const parsedValue = JSON.parse(retrievedValue);
             expect(parsedValue.key).toBe('value');
             expect(parsedValue.nested.data).toBe('test');
+        }, 15000);
+
+        it('should delete a secret', async () => {
+            const secretId = `test-delete-secret-${Date.now()}`;
+            const testValue = 'value-to-delete';
+            
+            await provider.setSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`, testValue);
+            await provider.deleteSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`);
+            
+            await expect(provider.getSecret(`gcsm://projects/${projectId}/secrets/${secretId}/versions/latest`))
+                .rejects
+                .toThrow();
         }, 15000);
     });
 }); 

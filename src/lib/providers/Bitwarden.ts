@@ -162,6 +162,10 @@ export class BitwardenProvider extends SecretProvider {
      */
     async tryLogin() {
         if(process.env.BW_CLIENTID && process.env.BW_CLIENTSECRET && process.env.BW_PASSWORD) {
+            // If we already have a session key, don't re-login
+            if (this.sessionKey) {
+                return;
+            }
             await this.cli.run('bw logout');
             if(process.env.BW_SERVER) {
                 const serverResponse = await this.cli.run(`bw config server ${process.env.BW_SERVER}`);
@@ -359,6 +363,55 @@ export class BitwardenProvider extends SecretProvider {
                 throw new Error(`Failed to write Bitwarden secret: ${error.message}`);
             }
             throw new Error('Failed to write Bitwarden secret: Unknown error');
+        }
+    }
+
+    /**
+     * Deletes a secret from Bitwarden.
+     * Deletes the entire item from the vault.
+     * 
+     * @param {string} path - The Bitwarden secret reference path
+     *                        Format: bw://[folder]/item-name/field
+     *                        Example: bw://my-folder/api-creds/password
+     * @returns {Promise<void>}
+     * @throws {Error} If the path is invalid or secret cannot be deleted
+     */
+    async deleteSecret(path: string): Promise<void> {
+        const parsedPath = this.parsePath(path);
+        
+        if (parsedPath.pathParts.length < 2) {
+            throw new Error('Bitwarden path must include at least item name and field');
+        }
+
+        await this.getItems();
+        
+        let itemPath = '';
+        if (parsedPath.pathParts.length === 2) {
+            itemPath = parsedPath.pathParts[0];
+        } else {
+            itemPath = parsedPath.pathParts.slice(0, -1).join('/');
+        }
+
+        const item = this.items.find((item) => item.id === itemPath || item.path === itemPath);
+
+        if (!item) {
+            throw new Error(`No item found with ID or name: ${itemPath}`);
+        }
+
+        try {
+            console.log(`🗑️  Deleting Bitwarden item ${itemPath}...`);
+            const deleteResponse = await this.cli.run(`bw delete item ${item.id} --session="${this.sessionKey}"`);
+            
+            if (deleteResponse.state !== 'ok') {
+                throw new Error(deleteResponse.message || 'Failed to delete item');
+            }
+            
+            this.items = [];
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to delete Bitwarden secret: ${error.message}`);
+            }
+            throw new Error('Failed to delete Bitwarden secret: Unknown error');
         }
     }
 
