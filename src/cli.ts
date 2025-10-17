@@ -18,6 +18,8 @@ import { parseEnvContent, truncateValueForDisplay, generateConfig } from './lib/
  * @throws {Error} If no valid file is found
  */
 function resolveInputFile(input: string): string {
+    const cwd = process.cwd();
+    
     // If the exact file exists, use it
     if (existsSync(input)) {
         return input;
@@ -31,11 +33,11 @@ function resolveInputFile(input: string): string {
         }
         
         // Both attempts failed
-        throw new Error(`Configuration file not found. Tried:\n  - ${input}\n  - ${salakalatPattern}`);
+        throw new Error(`Configuration file not found (tried: ${input}, ${salakalatPattern} in ${cwd})`);
     }
 
     // Input has extension but file doesn't exist
-    throw new Error(`Configuration file '${input}' not found`);
+    throw new Error(`Configuration file '${input}' not found (tried: ${input} in ${cwd})`);
 }
 
 /**
@@ -79,7 +81,7 @@ async function promptForEnvironment(environments: string[]): Promise<string> {
     });
 }
 
-const PACKAGE_VERSION = '1.3.3';
+const PACKAGE_VERSION = '1.3.4';
 
 program
     .name('salakala')
@@ -87,6 +89,8 @@ program
     .version(PACKAGE_VERSION);
 
 program
+    .command('generate', { isDefault: true })
+    .description('Generate .env files from secret providers (default command)')
     .option('-i, --input <file>', 'input config file path or environment name (e.g., "local" → "salakala.local.json")', 'salakala.json')
     .option('-e, --env <environment>', 'environment to use from input file (interactive selection if not provided)')
     .option('-o, --output <file>', 'output file path', '.env')
@@ -170,7 +174,7 @@ program
     .description('Synchronize secrets from source to destination provider(s)')
     .option('-i, --input <file>', 'input config file path', 'salakala.json')
     .option('-e, --env <environment>', 'environment to use from input file')
-    .option('-s, --secret <name>', 'sync only this specific secret')
+    .option('-n, --secret <name>', 'sync only this specific secret')
     .option('--dry-run', 'show what would be synced without actually syncing')
     .option('-y, --yes', 'skip all prompts and overwrite conflicts automatically')
     .action(async (options) => {
